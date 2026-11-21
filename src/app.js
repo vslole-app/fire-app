@@ -1721,6 +1721,65 @@ function xCardRef(x,S){
     return [el("span","name",(x.book||"").replace(/,\s*$/,"")),el("span","name",x.ref||"")];
   return [el("span","name",refStr(x))];
 }
+// Страницы сообщения из оглавления (не только сегодняшняя/завтрашняя часть).
+function xMsMessagePages(S,p){
+  if(!S||!S.ms||!S.plan[p])return [];
+  const B=msBook(S.def&&S.def.ms),m=/^(?:Сообщ\.|Гл\.)\s*(\d+)(?:\s*[–-]\s*(\d+))?/.exec(S.plan[p][0]||"");
+  if(!B||!m)return [];
+  const from=+m[1],to=+(m[2]||m[1]),pages=[];
+  msUnits(B).forEach(u=>{if(u.n>=from&&u.n<=to)for(let n=u.p0;n<u.p0+u.pages;n++)pages.push(n)});
+  return pages;
+}
+// Находим календарную часть расписания, к которой относится отдельная страница.
+function xMsPagePart(S,page){
+  for(let p=0;p<S.plan.length;p++){
+    const row=S.plan[p];if(!row||!row[0])continue;
+    const m=/стр\.?\s*(\d+)(?:\s*[–-]\s*(\d+))?/.exec(row[1]||"");if(!m)continue;
+    const a=+m[1],b=m[2]?+m[2]:a;
+    if(page>=a&&page<=b){const pages=[];for(let n=a;n<=b;n++)pages.push(n);return {p,pages}}
+  }
+  return null;
+}
+function xMsPageDone(id,k,part,page){
+  if(!part)return false;
+  const st=xSt(id)[k];
+  return st.read.includes(part.p)||(st.pg&&Array.isArray(st.pg[part.p])&&st.pg[part.p].includes(page));
+}
+// Тот же учёт страниц, что и в разделе «Где я»: частичные отметки не засчитывают целую часть.
+function xMsTogglePage(id,k,page){
+  const S=xS(id),part=S&&xMsPagePart(S,page);if(!part)return;
+  const st=xSt(id)[k];st.pg=st.pg||{};
+  if(st.read.includes(part.p)){
+    st.read=st.read.filter(v=>v!==part.p);
+    st.log=st.log.filter(v=>v.p!==part.p);
+    const remaining=part.pages.filter(v=>v!==page);
+    if(remaining.length)st.pg[part.p]=remaining;else delete st.pg[part.p];
+    save();render();return;
+  }
+  const current=st.pg[part.p]||[];
+  const updated=current.includes(page)?current.filter(v=>v!==page):[...current,page];
+  if(part.pages.every(v=>updated.includes(v))){delete st.pg[part.p];xMark(id,k,part.p)}
+  else{if(updated.length)st.pg[part.p]=updated;else delete st.pg[part.p];save();render()}
+}
+function xMsCardLink(id,k,S,p,x,label,classes){
+  const nums=xMsMessagePages(S,p);if(!nums.length)return null;
+  const tile=el("div",classes+" mspage-card");
+  const title=el("a","name mspage-name",(x.book||"").replace(/,\s*$/,""));
+  title.href=chapterUrl(x);title.target="_blank";title.rel="noopener";
+  const strip=el("div","mspage-strip");
+  nums.forEach(page=>{
+    const part=xMsPagePart(S,page),done=xMsPageDone(id,k,part,page);
+    const b=el("button","mspage-box"+(done?" on":""),String(page));b.type="button";
+    b.disabled=!part;
+    b.setAttribute("aria-pressed",String(done));
+    b.setAttribute("aria-label","Страница "+page+(done?" — прочитана, снять отметку":" — отметить прочитанной"));
+    b.title="Страница "+page+(done?" · прочитано":" · отметить");
+    b.addEventListener("click",e=>{e.stopPropagation();xMsTogglePage(id,k,page)});
+    strip.append(b);
+  });
+  tile.append(el("span","label",label),title,strip,el("span","sub",xDate(S,p)));
+  return tile;
+}
 function xName(id){return id==="spb"?"Церковь":(xDef(id)||{}).name||"Моё расписание"}
 function churchOn(){return (SCHED.spb&&tracks().spb&&!noPlan())||!!(state.extra||{}).spb&&tracks().spb}
 function enableChurch(){state.planChosen=true;
@@ -1854,16 +1913,21 @@ function renderExtras(){
       if(np>=S.plan.length&&!done){tcd.append(el("p","muted","Расписание пройдено 🎉"));tg.append(tcd);return}
       const shown=done?tod[tod.length-1].p:np,x=part2(S,k,shown);try{if(x&&x.book)th.append(verseBtn(k,shown,x,id))}catch(e){}
       const cols=el("div","tcols"),left=el("div","tcol"),right=el("div","tcol");
-      const a=el("a","tlink");a.href=chapterUrl(x);a.target="_blank";a.rel="noopener";
-      a.append(el("span","label",done?"Прочитано сегодня":shown<xCut(id,S)?"Догнать":shown<=ti?"Сегодня":"Заранее"),...xCardRef(x,S),...(!S.ms&&x.title?[el("span","mst",x.title)]:[]),el("span","sub",xDate(S,shown)));
+      const leftLabel=done?"Прочитано сегодня":shown<xCut(id,S)?"Догнать":shown<=ti?"Сегодня":"Заранее";
+      let a=S.ms?xMsCardLink(id,k,S,shown,x,leftLabel,"tlink"):null;
+      if(!a){a=el("a","tlink");a.href=chapterUrl(x);a.target="_blank";a.rel="noopener";
+        a.append(el("span","label",leftLabel),...xCardRef(x,S),...(!S.ms&&x.title?[el("span","mst",x.title)]:[]),el("span","sub",xDate(S,shown)))}
       const btn=el("button","tbtn");btn.type="button";
       if(done){btn.textContent="Прочитано ✓";btn.classList.add("done");btn.disabled=true}else{btn.textContent="Прочитал(а)";btn.classList.add("nudge");confirmTap(btn,"Нажмите ещё раз",()=>xMark(id,k,np))}
       left.append(a,btn);
       if(!done&&shown<xCut(id,S)&&id!=="spb"&&S.ms){const n=xLateUnits(id,k);if(n>1){const j=el("button","linkbtn xjump","Пропустить "+n+" и читать по расписанию");j.type="button";confirmTap(j,"Нажмите ещё раз",()=>xJump(id,k));left.append(j)}}
       if(done){const u=el("button","linkbtn undolink","Отменить");u.type="button";u.addEventListener("click",()=>xUndo(id,k));left.append(u)}
       const nx=done?np:np+1;
-      if(nx<S.plan.length&&part2(S,k,nx).book){const y=part2(S,k,nx),a2=el("a","nextlink"+(done?"":" later"));a2.href=chapterUrl(y);a2.target="_blank";a2.rel="noopener";
-        a2.append(el("span","label",done?"Следующий":"Потом"),...xCardRef(y,S),...(!S.ms&&y.title?[el("span","mst",y.title)]:[]),el("span","sub",xDate(S,nx)));right.append(a2);
+      if(nx<S.plan.length&&part2(S,k,nx).book){const y=part2(S,k,nx),nextLabel=done?"Следующий":"Потом";
+        let a2=S.ms?xMsCardLink(id,k,S,nx,y,nextLabel,"nextlink"+(done?"":" later")):null;
+        if(!a2){a2=el("a","nextlink"+(done?"":" later"));a2.href=chapterUrl(y);a2.target="_blank";a2.rel="noopener";
+          a2.append(el("span","label",nextLabel),...xCardRef(y,S),...(!S.ms&&y.title?[el("span","mst",y.title)]:[]),el("span","sub",xDate(S,nx)))}
+        right.append(a2);
         if(done){const b2=el("button","tbtn nextmark","Прочитал(а)");b2.type="button";confirmTap(b2,"Нажмите ещё раз",()=>xMark(id,k,np));right.append(b2)}}
       cols.append(left,right);tcd.append(cols);tg.append(tcd)});
     // «Где я» — отдельный вид: пока открыт, чтение на сегодня скрыто

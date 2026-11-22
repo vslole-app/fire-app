@@ -1506,11 +1506,19 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const nB=read.size,nLs=lsAll.filter(o=>o.full).length;
   // итоги: по одной плитке на каждую часть шкафа
   const sum=el("div","libsum");
-  const tile=(num,of,label)=>{const t=el("div","libtile");const b=el("b",null,String(num));if(of)b.append(el("small",null," / "+of));t.append(b,el("span",null,label));return t};
-  sum.append(tile(nB,66,plural(nB,"книга Библии","книги Библии","книг Библии")));
-  if(mine){sum.append(tile(nLs,MSB.ls.length,"Жизнеизучений"+(lsAll.length>nLs?" · начато "+(lsAll.length-nLs):"")));
-    const nO=oth.filter(o=>o.full).length;sum.append(tile(nO,0,plural(nO,"книга служения","книги служения","книг служения")+(oth.length>nO?" · читаю "+(oth.length-nO):"")))}
-  sheet.append(sum);
+  const tile=(num,of,label,status="")=>{
+    const t=el("div","libtile"),b=el("b",null,String(num));
+    if(of)b.append(el("small",null,"/"+of));
+    t.append(b,el("span",null,label));
+    if(status)t.append(el("small","libtile-status",status));
+    return t;
+  };
+  sum.append(tile(nB,66,"Библия"));
+  if(mine){
+    const starting=lsAll.length-nLs,nO=oth.filter(o=>o.full).length,reading=oth.length-nO;
+    sum.append(tile(nLs,MSB.ls.length,"Жизнеизучение",starting?"Начато "+starting:""),
+      tile(nO,0,"Служение",reading?"Читаю "+reading:""));
+  }
   // шкаф: сверху Библия, ниже Жизнеизучение, ниже остальные книги служения
   const cab=el("div","bcase"),info=el("div","shelfinfo libinfo","Нажмите на корешок — покажу, что прочитано.");
   const pick=(sp,html)=>{cab.querySelectorAll(".spine.on").forEach(q=>q.classList.remove("on"));sp.classList.add("on");info.innerHTML=html};
@@ -1540,7 +1548,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
     oth.forEach((o,i)=>row.append(spineMs(o,o.B,o.B.t.length>16?o.B.t.slice(0,15)+"…":o.B.t,pal[i%pal.length],o.B.t+" · "+o.B.a)));
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
-  sheet.append(cab,info);
+  sheet.append(cab,info,sum);
   // Мой путь: та же география книг, что на глобусе читателей.
   // Тропинки строятся по отметкам чтения, а точки показывают завершённые книги.
   const validDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();

@@ -653,6 +653,9 @@
       return [{ ...item, v }];
     });
     const stage = el("div", "reading-globe-stage");
+    const detail = host.nextElementSibling;
+    const hasDetail = detail?.classList.contains("reading-book-detail");
+    let selected = null;
     const canvas = document.createElement("canvas");
     canvas.setAttribute("aria-label", "Вращающийся глобус книг с последовательностью прочтения");
     canvas.setAttribute("role", "img");
@@ -701,8 +704,12 @@
       flameContext.clearRect(0,0,sizeW,sizeH);
       for (const marker of hit) {
         if (!marker.scale) continue;
-        drawReaderFlame(flameContext, marker.x, marker.y, marker.scale,
-          motion?.matches ? 0 : timestamp / 1000, marker.phase);
+        if (marker.e === selected) {
+          window.OgonekProgressVisual.flame(flameContext, marker.x, marker.y, marker.scale, 1);
+        } else {
+          drawReaderFlame(flameContext, marker.x, marker.y, marker.scale,
+            motion?.matches ? 0 : timestamp / 1000, marker.phase);
+        }
       }
     };
     const animate = timestamp => {
@@ -746,7 +753,12 @@
           if(!drawRing(landBook,book.poly,cx,cy,R))return;
           const k=rotBook(book.c),light=.55+.45*Math.max(0,dot(k,L));
           ctx.fillStyle="rgb("+book.col.map(v=>Math.round(v*light)).join(",")+")";
-          ctx.fill(landBook);ctx.lineWidth=.8;ctx.strokeStyle="rgba(46,36,21,.55)";ctx.stroke(landBook);
+          const chosen = selected?.kind === "bible" && selected.v === book.c;
+          if (chosen) ctx.fillStyle = "#ffd276";
+          ctx.fill(landBook);
+          ctx.lineWidth = chosen ? 2 : .8;
+          ctx.strokeStyle = chosen ? "#fff3c5" : "rgba(46,36,21,.55)";
+          ctx.stroke(landBook);
         });
         ctx.restore();
       });
@@ -885,7 +897,13 @@
       if(target&&typeof onSelect==="function") {
         const nearby = hit.filter(q => Math.hypot(q.x-target.x,q.y-target.y)<8)
           .map(q => q.e).sort((a,b) => b.date.localeCompare(a.date));
+        selected = target.e;
         onSelect(nearby);
+        draw();
+      } else if (selected) {
+        selected = null;
+        if (hasDetail) detail.hidden = true;
+        draw();
       }
     };
     canvas.addEventListener("pointerup",end);
@@ -897,6 +915,13 @@
       else if(ev.key==="ArrowUp"){pitch=clamp(pitch-.15,-1.4,1.4);draw();ev.preventDefault()}
       else if(ev.key==="ArrowDown"){pitch=clamp(pitch+.15,-1.4,1.4);draw();ev.preventDefault()}
     });
+    if (hasDetail) {
+      Object.assign(detail.style, {
+        position:"absolute", left:"10px", right:"10px", bottom:"10px",
+        maxHeight:"32%", overflowY:"auto", background:"rgba(16,23,50,.96)"
+      });
+      stage.append(detail);
+    }
     host.append(stage);
     const observer=window.ResizeObserver?new ResizeObserver(resize):null;
     if(observer)observer.observe(stage);else window.addEventListener("resize",resize);

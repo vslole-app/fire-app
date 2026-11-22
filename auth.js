@@ -1340,7 +1340,7 @@ async function main() {
     bell.addEventListener("click", () => { closeUserMenu(); openNotifySettings(); });
     const archive = item("", "scroll", "Архив");
     archive.addEventListener("click", () => { closeUserMenu(); if(O().openArchive) O().openArchive(); });
-    const awards = item("", "medal", "Награды");
+    const awards = item("", "awards", "Награды");
     awards.addEventListener("click", () => { closeUserMenu(); if(O().openMyAwards) O().openMyAwards(); });
     const out = item(" danger", "exit", "Выйти"), outT = out.querySelector(".umt");
     out.addEventListener("click", () => {

@@ -1540,21 +1540,34 @@ function openBooks(list,who,ministryBooks){
     svg.append(sv("text",{x:38,y:173,fill:"#cfd5f3","font-size":13,"text-anchor":"middle"},parse(first[1]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})));
     svg.append(sv("text",{x:38,y:187,fill:"#cfd5f3","font-size":12,"text-anchor":"middle"},String(parse(first[1]).getFullYear())));
   }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
-  // Последние пять реальных завершённых книг — только из списка пользователя.
+  // На маршруте всегда показываются последние завершённые книги.
+  // Новая книга автоматически занимает следующую светящуюся точку
+  // при повторном открытии библиотеки. Под каждой — дата завершения.
   const milestones=dated.slice(-5);
   const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]].slice(5-milestones.length);
   milestones.forEach(([id,date],i)=>{
     const [x,y]=positions[i],isLast=i===milestones.length-1;
-    const group=sv("g",{"aria-label":BOOK[id].n+", "+shortDate(date)});
-    group.append(sv("title",{},BOOK[id].n+" · "+shortDate(date)));
-    group.append(sv("circle",{cx:x,cy:y,r:isLast?12:8,fill:isLast?"#32d6c9":"#ad91ed",opacity:".2"}));
-    group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:4.4,fill:isLast?"#55e4d5":"#d2b9ff",stroke:"#f7eeff","stroke-width":1.8}));
-    const raw=(BOOK[id].a||id).replace(/\.$/,"");
+    const name=BOOK[id].n,fullDate=shortDate(date);
+    const group=sv("g",{"aria-label":name+", прочитана "+fullDate});
+    group.append(sv("title",{},name+" · прочитана "+fullDate));
+    // Подсветка всех пройденных книг, у самой новой пламя ярче.
+    group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
+      fill:isLast?"#29dcd0":"#a78beb",opacity:isLast?".19":".14"}));
+    group.append(sv("circle",{cx:x,cy:y,r:isLast?11:9,
+      fill:isLast?"#35e6d7":"#a98ced",opacity:".28"}));
+    group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:5,
+      fill:isLast?"#59f0e4":"#d3bcff",stroke:"#ffffff","stroke-width":1.8}));
+    const raw=(BOOK[id].a||id).replace(/\\.$/,"");
     const label=raw.length>10?raw.slice(0,9)+"…":raw;
-    const w=Math.min(86,Math.max(39,label.length*8.5+14));
-    const ly=(i%2===0?y-39:y+14);
-    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:26,rx:8,fill:isLast?"#185f64":"#302b54",stroke:isLast?"#48dbcf":"#8b78ba","stroke-width":1.3}));
-    group.append(sv("text",{x,y:ly+18,fill:"#f5f5ff","font-size":15,"font-weight":"600","text-anchor":"middle"},label));
+    const dateLabel=parse(date).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit"});
+    const w=Math.min(90,Math.max(68,label.length*8.4+15));
+    const ly=y-64;
+    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:48,rx:9,
+      fill:isLast?"#195962":"#302d53",stroke:isLast?"#43e1d5":"#8a79ba","stroke-width":1.5}));
+    group.append(sv("text",{x,y:ly+19,fill:"#f6f6ff","font-size":14,
+      "font-weight":"700","text-anchor":"middle"},label));
+    group.append(sv("text",{x,y:ly+37,fill:isLast?"#b1ffef":"#c7c6e1",
+      "font-size":11.5,"font-weight":"600","text-anchor":"middle"},dateLabel));
     svg.append(group);
   });
   // Флажок и конец маршрута — это цель, не зафиксированный факт.

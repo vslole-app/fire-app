@@ -1464,7 +1464,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
     .filter(x=>typeof x[0]==="string"&&x[0]);
   const read=new Map(list.map(x=>[x[0],x]));
   const modal=embedded?null:el("div","fmodal"),sheet=el("section","fsheet bshelf lib"+(embedded?" lib-embedded":""));if(!embedded){sheet.setAttribute("role","dialog");sheet.setAttribute("aria-modal","true")}sheet.setAttribute("aria-label",mine?"Моя библиотека":"Библиотека");
-  const close=()=>{if(!modal)return;modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
+  const close=()=>{if(!modal)return;if(typeof globeCleanup==="function")globeCleanup();modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
   if(modal){modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc)}
   const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h);if(!embedded)head.append(x);
   sheet.append(head);
@@ -1515,192 +1515,46 @@ function openBooks(list,who,ministryBooks,embedded=false){
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
-  // Маршрут объединяет завершённые книги Библии, Жизнеизучения
-  // и другие книги служения. Не показываем незавершённые книги и даты
-  // без подтверждённых отметок. Данные друзей берём из их профиля.
-  const completedDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();
-  const biblical=list.filter(([a,d])=>BOOK[a]&&completedDate(d))
-    .map(([a,d])=>({id:a,date:d,name:BOOK[a].n,label:(BOOK[a].a||a).replace(/\.$/,""),kind:"bible"}));
-  // Книга служения на полке может быть завершена и без даты (например,
-  // при переносе бумажного чтения). Отображаем её, но дату не выдумываем.
-  const ministry=ms.filter(o=>o.full)
-    .map(o=>({id:"ms:"+o.id,date:completedDate(o.last)?o.last:"",name:o.B.t,
-      label:o.B.k==="ls"?"ЖИ "+(o.B.a||o.B.t):o.B.t,kind:o.B.k==="ls"?"ls":"ministry"}));
-  const dated=biblical.concat(ministry)
-    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
-  const first=dated.find(o=>o.date)||null,doneBooks=Math.min(66,read.size);
-  const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
-  // Увеличение остаётся только внутри маршрута; книжную полку и
-  // прокрутку остального окна библиотеки не затрагиваем.
-  const routeInfo=el("div","libroute-detail");
-  routeInfo.hidden=true;routeInfo.setAttribute("aria-live","polite");
-  let blockRouteTapUntil=0;
-  function showRouteBook(item){
-    if(Date.now()<blockRouteTapUntil)return;
-    routeInfo.replaceChildren(
-      el("strong",null,item.name),
-      el("span",null,item.date?"Прочитана "+fmtLong(item.date):"Дата завершения не указана")
-    );
-    routeInfo.hidden=false;
-  }
-  const scene=el("div","libroute-scene");
-  const NS="http://www.w3.org/2000/svg";
-  const svg=document.createElementNS(NS,"svg");
-  svg.setAttribute("viewBox","0 0 560 225");svg.setAttribute("width","560");svg.setAttribute("height","225");svg.setAttribute("role","img");
-  svg.setAttribute("aria-label","Условный маршрут: отмечены последние прочитанные книги и финиш");
-  svg.setAttribute("preserveAspectRatio","xMidYMid meet");
-  const sv=(tag,attrs={},txt)=>{const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));if(txt!=null)node.textContent=txt;return node};
-  const routePath="M 38 150 C 104 136,143 160,206 136 S 318 149,375 112 S 478 132,522 70";
-  svg.append(sv("path",{d:"M0 207 L0 181 Q27 164 54 185 T110 185 Q150 159 188 187 T260 186 Q306 164 340 190 T409 186 Q459 169 503 187 T560 173 L560 225 L0 225Z",fill:"#202844",opacity:".9"}));
-  svg.append(sv("path",{d:"M0 218 Q69 190 130 211 T277 207 Q347 189 414 214 T560 207 L560 225 L0 225Z",fill:"#171e38",opacity:".88"}));
-  svg.append(sv("path",{d:routePath,fill:"none",stroke:"#8885b9","stroke-width":2.7,"stroke-linecap":"round","stroke-dasharray":"7 8"}));
-  [[54,42],[151,51],[299,34],[473,42]].forEach(([x,y])=>svg.append(sv("circle",{cx:x,cy:y,r:1.4,fill:"#bbb0df",opacity:".6"})));
-  // Начало — первая известная дата, а не искусственно выбранный день.
-  svg.append(sv("circle",{cx:38,cy:150,r:11,fill:"#73abfc",opacity:".18"}));
-  svg.append(sv("circle",{cx:38,cy:150,r:6,fill:"#87b9ff",stroke:"#dceaff","stroke-width":2}));
-  if(first){
-    svg.append(sv("text",{x:38,y:173,fill:"#cfd5f3","font-size":13,"text-anchor":"middle"},parse(first.date).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})));
-    svg.append(sv("text",{x:38,y:187,fill:"#cfd5f3","font-size":12,"text-anchor":"middle"},String(parse(first.date).getFullYear())));
-  }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
-  // Последние пять завершённых книг всех видов; новая книга
-  // появляется автоматически при следующем открытии библиотеки.
-  const milestones=dated.slice(-5);
-  const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]];
-  // Серые точки видны с самого начала; при завершении книги
-  // они последовательно загораются слева направо.
-  const litPath=positions.slice(0,milestones.length);
-  if(litPath.length)svg.append(sv("path",{d:"M 38 150 "+litPath.map(([x,y])=>"L "+x+" "+y).join(" "),
-    fill:"none",stroke:"#58dacf","stroke-width":3,"stroke-linecap":"round",opacity:".9"}));
-  positions.forEach(([x,y],i)=>{
-    const item=milestones[i];
-    if(!item){svg.append(sv("circle",{cx:x,cy:y,r:7.5,
-      fill:"#434764",stroke:"#9294bd","stroke-width":2,opacity:".85"}));return}
-    const isLast=i===milestones.length-1;
-    const {date,name,kind}=item,fullDate=date?shortDate(date):"дата не указана";
-    const dateText=date?"прочитана "+fullDate:"прочитана, дата не указана";
-    const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point",
-      "role":"button","tabindex":"0","aria-label":name+", "+dateText});
-    group.addEventListener("click",()=>showRouteBook(item));
-    group.addEventListener("keydown",ev=>{
-      if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();showRouteBook(item)}
+  // Мой путь: та же география книг, что на глобусе читателей.
+  // Здесь отмечаются ТОЛЬКО действительно завершённые книги.
+  const validDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();
+  const bible=list.filter(([id,d])=>BOOK[id]&&validDate(d))
+    .map(([id,date])=>({id,date,name:BOOK[id].n,
+      label:BOOK[id].a||id,kind:"bible"}));
+  const ministry=ms.filter(o=>o.full).map(o=>({
+    id:"ms:"+o.id,date:validDate(o.last)?o.last:"",
+    name:o.B.t,label:o.B.t,kind:o.B.k==="ls"?"ls":"ministry"
+  }));
+  const history=bible.concat(ministry).sort((a,b)=>
+    a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
+  const heading=el("div","reading-globe-heading");
+  heading.append(el("h3",null,"Мой путь чтения"),
+    el("span",null,history.length+" "+plural(history.length,"книга","книги","книг")+" прочитано"));
+  const globeHost=el("div","reading-globe-host","Загружаю карту книг…");
+  const bookDetail=el("div","reading-book-detail");
+  bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
+  const explain=el("p","reading-globe-hint",
+    "Вращайте глобус, приближайте и нажимайте на светящиеся книги, чтобы увидеть точную дату.");
+  sheet.append(heading,globeHost,bookDetail,explain);
+  let globeCleanup=null;
+  const mount=()=>{
+    if(!globeHost.isConnected||globeCleanup)return;
+    const G=window.OgonekGlobe;
+    if(!G||typeof G.mountReading!=="function"){setTimeout(mount,180);return}
+    globeHost.textContent="";
+    globeCleanup=G.mountReading(globeHost,history,item=>{
+      bookDetail.hidden=false;
+      bookDetail.replaceChildren(el("b",null,item.name),el("span",null,
+        item.date?"Прочитана "+fmtLong(item.date):"Книга завершена, дата не указана"));
     });
-    group.append(sv("title",{},name+" · "+dateText+
-      (kind==="ls"?" · Жизнеизучение":kind==="ministry"?" · Книга служения":" · Библия")));
-    group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
-      fill:isLast?"#29dcd0":"#a78beb",opacity:isLast?".19":".14"}));
-    group.append(sv("circle",{cx:x,cy:y,r:isLast?11:9,
-      fill:isLast?"#35e6d7":"#a98ced",opacity:".28"}));
-    group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:5,
-      fill:isLast?"#59f0e4":"#d3bcff",stroke:"#ffffff","stroke-width":1.8}));
-    const raw=item.label;
-    const label=raw.length>10?raw.slice(0,9)+"…":raw;
-    const dateLabel=date?parse(date).toLocaleDateString("ru-RU",
-      {day:"2-digit",month:"2-digit",year:"2-digit"}):"без даты";
-    const w=Math.min(90,Math.max(68,label.length*8.4+15));
-    const ly=y-64;
-    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:48,rx:9,
-      fill:isLast?"#195962":"#302d53",stroke:isLast?"#43e1d5":"#8a79ba","stroke-width":1.5}));
-    group.append(sv("text",{x,y:ly+19,fill:"#f6f6ff","font-size":14,
-      "font-weight":"700","text-anchor":"middle"},label));
-    group.append(sv("text",{x,y:ly+37,fill:isLast?"#b1ffef":"#c7c6e1",
-      "font-size":11.5,"font-weight":"600","text-anchor":"middle"},dateLabel));
-    svg.append(group);
-  });
-  // Флажок и конец маршрута — это цель, не зафиксированный факт.
-  svg.append(sv("path",{d:"M522 81 L522 31",stroke:"#ffe0a5","stroke-width":2.7}));
-  svg.append(sv("path",{d:"M523 31 Q535 25 545 34 L536 48 L523 45Z",fill:"#f6ae4b"}));
-  svg.append(sv("circle",{cx:522,cy:81,r:8,fill:doneBooks===66?"#55e4d5":"#f9ba64",stroke:"#ffe4ae","stroke-width":2}));
-  svg.append(sv("rect",{x:468,y:103,width:82,height:36,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
-  svg.append(sv("text",{x:509,y:118,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Вся"));
-  svg.append(sv("text",{x:509,y:133,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Библия"));
-  // viewBox ограничен исходной картой: zoom x1–x5 без пустых полей.
-  const ZW=560,ZH=225,maxZoom=5;
-  let viewport={x:0,y:0,w:ZW,h:ZH},zoom=1;
-  const zoomRow=el("div","libroute-zoom");
-  const btn=(label,title)=>{
-    const b=el("button","libroute-zoom-btn",label);
-    b.type="button";b.setAttribute("aria-label",title);return b;
+    if(embedded)window.__readingGlobeDestroy=globeCleanup;
   };
-  const minus=btn("−","Уменьшить график");
-  const plus=btn("+","Приблизить график");
-  const reset=btn("↺","Показать весь график");
-  const zoomText=el("span","libroute-zoom-pct","100%");
-  zoomRow.append(minus,zoomText,plus,reset);
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const updateZoom=()=>{
-    svg.setAttribute("viewBox",[viewport.x,viewport.y,viewport.w,viewport.h].join(" "));
-    zoomText.textContent=Math.round(zoom*100)+"%";
-    minus.disabled=zoom<=1.001;plus.disabled=zoom>=maxZoom-.001;
-    reset.disabled=zoom<=1.001;
-  };
-  // Центрирование на точке пальцев или на середине при нажатии кнопки.
-  const changeZoom=(desired,focusX=viewport.x+viewport.w/2,focusY=viewport.y+viewport.h/2)=>{
-    const target=clamp(desired,1,maxZoom);
-    const fx=(focusX-viewport.x)/viewport.w,fy=(focusY-viewport.y)/viewport.h;
-    const w=ZW/target,h=ZH/target;
-    viewport={x:clamp(focusX-fx*w,0,ZW-w),y:clamp(focusY-fy*h,0,ZH-h),w,h};
-    zoom=target;updateZoom();
-  };
-  const pan=(dx,dy)=>{
-    if(zoom<=1)return;
-    const rect=svg.getBoundingClientRect();
-    if(!rect.width||!rect.height)return;
-    viewport.x=clamp(viewport.x-dx/rect.width*viewport.w,0,ZW-viewport.w);
-    viewport.y=clamp(viewport.y-dy/rect.height*viewport.h,0,ZH-viewport.h);
-    updateZoom();
-  };
-  const fromClient=(x,y)=>{
-    const rect=svg.getBoundingClientRect();
-    return {x:viewport.x+clamp((x-rect.left)/(rect.width||1),0,1)*viewport.w,
-      y:viewport.y+clamp((y-rect.top)/(rect.height||1),0,1)*viewport.h};
-  };
-  const pointers=new Map();
-  let pinch=null;
-  const pinchInfo=()=>{
-    const [a,b]=[...pointers.values()];
-    if(!a||!b)return null;
-    return {dist:Math.hypot(a.x-b.x,a.y-b.y),
-      x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-  };
-  svg.addEventListener("pointerdown",ev=>{
-    if(ev.pointerType==="mouse"&&ev.button!==0)return;
-    pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
-    if(pointers.size===2)pinch=pinchInfo();
-  });
-  svg.addEventListener("pointermove",ev=>{
-    const old=pointers.get(ev.pointerId);if(!old)return;
-    const dx=ev.clientX-old.x,dy=ev.clientY-old.y;
-    pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
-    if(pointers.size>=2){
-      const current=pinchInfo();
-      if(current&&pinch&&pinch.dist>0&&current.dist>0){
-        const focus=fromClient(current.x,current.y);
-        changeZoom(zoom*current.dist/pinch.dist,focus.x,focus.y);
-        pan(current.x-pinch.x,current.y-pinch.y);
-        blockRouteTapUntil=Date.now()+350;
-      }
-      pinch=current;
-    }else if(zoom>1&&(Math.abs(dx)>0||Math.abs(dy)>0)){
-      pan(dx,dy);
-      if(Math.hypot(dx,dy)>1)blockRouteTapUntil=Date.now()+350;
-    }
-  });
-  const endPointer=ev=>{pointers.delete(ev.pointerId);pinch=pointers.size===2?pinchInfo():null};
-  svg.addEventListener("pointerup",endPointer);
-  svg.addEventListener("pointercancel",endPointer);
-  svg.addEventListener("lostpointercapture",endPointer);
-  plus.addEventListener("click",()=>changeZoom(zoom*1.5));
-  minus.addEventListener("click",()=>changeZoom(zoom/1.5));
-  reset.addEventListener("click",()=>changeZoom(1));
-  svg.addEventListener("dblclick",ev=>{
-    ev.preventDefault();const p=fromClient(ev.clientX,ev.clientY);
-    changeZoom(zoom*1.5,p.x,p.y);
-  });
-  updateZoom();
-  scene.append(svg,zoomRow,routeInfo);
-  sheet.append(scene);
-  if(embedded){const holder=$("libraryInline");if(holder)holder.replaceChildren(sheet)}
-  else{modal.append(sheet);document.body.append(modal)}
+  if(embedded){
+    if(typeof window.__readingGlobeDestroy==="function")window.__readingGlobeDestroy();
+    window.__readingGlobeDestroy=null;
+    const holder=$("libraryInline");if(holder)holder.replaceChildren(sheet);
+  }else{modal.append(sheet);document.body.append(modal)}
+  mount();
 }
 /* ---------- пройденные расписания и управление своими расписаниями ---------- */
 // расписание пройдено, когда прочитаны все его дни; запоминаем это навсегда (даже если расписание потом удалить)

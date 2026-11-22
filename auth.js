@@ -664,11 +664,19 @@ async function main() {
     // книжная полка: какие книги прочитаны и когда
     const bl = isMe ? null : (Array.isArray(d.books) ? d.books : []);
     const bn = isMe ? O().booksCount() : bl.length;
-    const shelfBtn = el("button", "bsbtn", "📚 " + (isMe ? "Моя книжная полка" : "Книжная полка") + " · " + bn + " из 66"); shelfBtn.type = "button";
+    const profileButtonIcon = name => {
+      const icon = el("span", "ico");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = window.OgonekIcons.ICO[name];
+      return icon;
+    };
+    const shelfBtn = el("button", "bsbtn", (isMe ? "Моя библиотека" : "Книжная полка") + " · " + bn + " из 66"); shelfBtn.type = "button";
+    shelfBtn.prepend(profileButtonIcon("lib"));
     shelfBtn.addEventListener("click", () => O().openBooks(isMe ? null : bl, isMe ? null : (d.name || "").split(" ")[0], isMe ? null : d.ministryBooks));
     // пройденные расписания (и для друзей), а у себя — ещё и управление своими расписаниями
     const pd = isMe ? null : (Array.isArray(d.plansDone) ? d.plansDone : []);
-    const pathBtn = el("button", "bsbtn", "🏁 Прочитанные расписания · " + (isMe ? O().finishedCount() : pd.length)); pathBtn.type = "button";
+    const pathBtn = el("button", "bsbtn", "Прочитанные расписания · " + (isMe ? O().finishedCount() : pd.length)); pathBtn.type = "button";
+    pathBtn.prepend(profileButtonIcon("plan"));
     pathBtn.addEventListener("click", () => O().openFinished(isMe ? null : pd, isMe ? null : (d.name || "").split(" ")[0]));
     const prow = el("div", "fprow"); prow.append(pathBtn);
     prow.style.gridTemplateColumns = "1fr"; // свои расписания и челленджи — во вкладке «Расписания»

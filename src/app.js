@@ -180,7 +180,8 @@ function render(){
   }
   $("calMonth").textContent=now.toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
 
-  {const n=booksSummary().length;$("booksOpen").textContent="📚 Моя библиотека · Библия "+n+" из 66";
+  {const n=booksSummary().length;const icon=icoEl("lib");icon.setAttribute("aria-hidden","true");
+    $("booksOpen").replaceChildren(icon,"Моя библиотека · Библия "+n+" из 66");
     let ls=0,mo=0;try{const m=msShelf();ls=m.filter(o=>o.B.k==="ls").length;mo=m.length-ls}catch(e){}
     $("libSub").textContent="Жизнеизучение: начато "+ls+" · книги служения: "+mo;const lb=$("libBarI");if(lb)lb.style.width=Math.max(n?3:0,Math.round(n/66*100))+"%";const lnn=$("libBarN");if(lnn)lnn.textContent="Библия · "+n+" из 66"}
   const pr=$("prog");pr.textContent="";

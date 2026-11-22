@@ -229,6 +229,11 @@
     ctx.stroke();
   }
   // «спящий» огонёк: человек сегодня ещё не читал — синий, неподвижный, чуть «дышит»
+  const readerFlameScale = (depth, zoom) => (0.6 + 0.4 * depth) * Math.min(1.5, 0.8 + 0.25 * zoom);
+  function drawReaderFlame(ctx, x, y, scale, seconds, phase) {
+    window.OgonekProgressVisual.flame(ctx, x + Math.sin(seconds * 5 + phase) * 0.6, y,
+      scale, 1 + 0.13 * Math.sin(seconds * 11 + phase));
+  }
   function sleepFlame(x,y,s,f){window.OgonekProgressVisual.sleepFlame(ctx,x,y,s,f)}
   function flame(x,y,s,f){window.OgonekProgressVisual.flame(ctx,x,y,s,f)}
 
@@ -368,9 +373,9 @@
     });
     // отдельные люди
     solo.sort((x, y) => x.z - y.z).forEach((p) => {
-      const s = (0.6 + 0.4 * p.z) * Math.min(1.5, 0.8 + 0.25 * zoom);
+      const s = readerFlameScale(p.z, zoom);
       ctx.globalAlpha = (match(p) ? 1 : 0.22) * Math.min(1, p.z * 3);
-      if (p.fire) flame(p.sx + Math.sin(t * 5 + p.ph) * 0.6, p.sy, s, 1 + 0.13 * Math.sin(t * 11 + p.ph));
+      if (p.fire) drawReaderFlame(ctx, p.sx, p.sy, s, t, p.ph);
       else sleepFlame(p.sx, p.sy, s * 0.9, 1 + 0.04 * Math.sin(t * 1.6 + p.ph));
       if (hasVerse(p) && !p.twin && (filt === "verse" || p === sel || p.rel === "me" || p.rel === "friend" || zoom >= 3)) { const bx = p.sx + 10 * s, by = p.sy - 19 * s, br = 6.5 * s; ctx.fillStyle = "#ffb020"; ctx.strokeStyle = "#0b1030"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#fff"; ctx.font = "900 " + Math.round(10 * s) + "px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.fillText("❞", bx, by + 3.6 * s); }
       ctx.globalAlpha = 1;
@@ -652,7 +657,10 @@
     canvas.setAttribute("aria-label", "Вращающийся глобус книг с последовательностью прочтения");
     canvas.setAttribute("role", "img");
     canvas.tabIndex = 0;
-    stage.append(canvas);
+    const flameLayer = document.createElement("canvas");
+    flameLayer.setAttribute("aria-hidden", "true");
+    Object.assign(flameLayer.style, {position:"absolute", inset:"0", pointerEvents:"none"});
+    stage.append(canvas, flameLayer);
     const controls = el("div", "reading-globe-controls");
     const control = (t, label, fn) => {
       const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-label", label);
@@ -684,7 +692,34 @@
       path.closePath(); return true;
     };
     const canvasContext = canvas.getContext("2d");
-    if (!canvasContext) return () => {};
+    const flameContext = flameLayer.getContext("2d");
+    if (!canvasContext || !flameContext) return () => {};
+    const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let flameFrame = 0, inView = !window.IntersectionObserver;
+    const paintFlames = timestamp => {
+      flameContext.setTransform(dpr,0,0,dpr,0,0);
+      flameContext.clearRect(0,0,sizeW,sizeH);
+      for (const marker of hit) {
+        if (!marker.scale) continue;
+        drawReaderFlame(flameContext, marker.x, marker.y, marker.scale,
+          motion?.matches ? 0 : timestamp / 1000, marker.phase);
+      }
+    };
+    const animate = timestamp => {
+      flameFrame = 0;
+      if (!alive || !host.isConnected || !inView || motion?.matches) return;
+      paintFlames(timestamp);
+      flameFrame = requestAnimationFrame(animate);
+    };
+    const updateAnimation = () => {
+      if (!inView || motion?.matches) {
+        cancelAnimationFrame(flameFrame);
+        flameFrame = 0;
+        if (inView && alive) paintFlames(performance.now());
+      } else if (!flameFrame && hit.some(marker => marker.scale)) {
+        flameFrame = requestAnimationFrame(animate);
+      }
+    };
     const draw = () => {
       if (!alive || !host.isConnected) return;
       const ctx = canvasContext, W = sizeW || 360, H = sizeH || 360;
@@ -754,19 +789,19 @@
       });
       const occupied = [[W - 48, 5, W, 138]];
       const markers = [...entries].sort((a, b) => Number(b.kind === "bible") - Number(a.kind === "bible"));
-      markers.forEach(e=>{
+      markers.forEach((e,index)=>{
         const p=rotBook(e.v);
         if(p[2]<.03)return;
         const x=cx+p[0]*R,y=cy-p[1]*R;
-        if(e.kind==="bible"){
-          const scale=e === last ? .75 : .62;
-          window.OgonekProgressVisual.flame(ctx,x,y,scale,1);
-          occupied.push([x-6,y-13,x+6,y+4]);
+        const scale=e.kind==="bible"?readerFlameScale(p[2],zoom):0;
+        if(scale){
+          const half=6*scale+2;
+          occupied.push([x-half,y-17*scale-2,x+half,y+2*scale+2]);
         }else{
           ctx.fillStyle="#cfb4ff";ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fill();
           occupied.push([x-4,y-4,x+4,y+4]);
         }
-        hit.push({x,y,e});
+        hit.push({x,y,e,scale,phase:index*2.4});
       });
 
       // Подписи подбирают свободное место вокруг отметок.
@@ -784,8 +819,8 @@
           const width=ctx.measureText(b.name).width+6,half=width/2;
           if(x<0||x>W||y<0||y>H||width>W-8)continue;
           const centered=clamp(x,half+4,W-half-4);
-          const positions=[[centered,y],[centered,y+font+8],[centered,y-18],
-            [x+half+8,y],[x-half-8,y]];
+          const positions=[[centered,y],[centered,y+font+9],[centered,y-24],
+            [x+half+12,y],[x-half-12,y]];
           for(const [tx,ty] of positions){
             const box=[tx-half,ty-font-2,tx+half,ty+4];
             const [left,top,right,bottom]=box;
@@ -797,6 +832,8 @@
           }
         }
       }
+      paintFlames(performance.now());
+      updateAnimation();
     };
     const resize=()=>{
       if(!alive||!host.isConnected)return;
@@ -805,6 +842,8 @@
       dpr=Math.min(2,window.devicePixelRatio||1);
       canvas.width=Math.round(sizeW*dpr);canvas.height=Math.round(sizeH*dpr);
       canvas.style.width=sizeW+"px";canvas.style.height=sizeH+"px";
+      flameLayer.width=canvas.width;flameLayer.height=canvas.height;
+      flameLayer.style.width=canvas.style.width;flameLayer.style.height=canvas.style.height;
       draw();
     };
     const zoomTo=v=>{zoom=clamp(v,.8,maxZoom);draw()};
@@ -861,9 +900,18 @@
     host.append(stage);
     const observer=window.ResizeObserver?new ResizeObserver(resize):null;
     if(observer)observer.observe(stage);else window.addEventListener("resize",resize);
+    const visibility=window.IntersectionObserver?new IntersectionObserver(([entry])=>{
+      inView=entry.isIntersecting;
+      updateAnimation();
+    }):null;
+    visibility?.observe(stage);
+    motion?.addEventListener?.("change",updateAnimation);
     requestAnimationFrame(resize);
     return ()=>{
       alive=false;if(observer)observer.disconnect();else window.removeEventListener("resize",resize);
+      visibility?.disconnect();
+      motion?.removeEventListener?.("change",updateAnimation);
+      cancelAnimationFrame(flameFrame);
       stage.remove();
     };
   }

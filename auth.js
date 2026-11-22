@@ -665,7 +665,7 @@ async function main() {
     const bl = isMe ? null : (Array.isArray(d.books) ? d.books : []);
     const bn = isMe ? O().booksCount() : bl.length;
     const shelfBtn = el("button", "bsbtn", "📚 " + (isMe ? "Моя книжная полка" : "Книжная полка") + " · " + bn + " из 66"); shelfBtn.type = "button";
-    shelfBtn.addEventListener("click", () => O().openBooks(isMe ? null : bl, isMe ? null : (d.name || "").split(" ")[0]));
+    shelfBtn.addEventListener("click", () => O().openBooks(isMe ? null : bl, isMe ? null : (d.name || "").split(" ")[0], isMe ? null : d.ministryBooks));
     // пройденные расписания (и для друзей), а у себя — ещё и управление своими расписаниями
     const pd = isMe ? null : (Array.isArray(d.plansDone) ? d.plansDone : []);
     const pathBtn = el("button", "bsbtn", "🏁 Прочитанные расписания · " + (isMe ? O().finishedCount() : pd.length)); pathBtn.type = "button";

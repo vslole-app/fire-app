@@ -1218,4 +1218,11 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .bsread-when{color:var(--muted);font-size:.7rem;line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums}
 .bsread-toggle{margin-top:auto;width:100%;padding:7px 3px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--link);font:inherit;font-size:.73rem;font-weight:700;cursor:pointer}
 .bsread-toggle:hover,.bsread-toggle:focus-visible{border-color:var(--link)}
+/* Второй ряд библиотеки: Жизнеизучения и другие книги служения. */
+.bsread-col.bsread-ls{border-color:color-mix(in srgb,#9d73e9 45%,var(--line))}
+.bsread-col.bsread-other{border-color:color-mix(in srgb,#26a8a0 45%,var(--line))}
+.bsread-col.bsread-ls .bsread-head h3,.bsread-col.bsread-other .bsread-head h3{font-size:.95rem;overflow-wrap:anywhere}
+.bsread-col.bsread-ls .bsread-when,.bsread-col.bsread-other .bsread-when{white-space:normal;overflow-wrap:anywhere}
+.bsread-empty{margin:0;padding:8px 4px;color:var(--muted);font-size:.74rem;line-height:1.3}
+
 @media (max-width:360px){.bsread-grid{gap:5px}.bsread-col{padding:7px 5px}.bsread-head h3{font-size:.92rem}.bsread-head span{font-size:.68rem}.bsread-item{gap:4px;padding:6px 4px}.bsread-name{font-size:.74rem}.bsread-when{font-size:.67rem}}

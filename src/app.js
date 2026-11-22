@@ -1454,7 +1454,7 @@ function msShelf(){
   return Object.values(out).filter(o=>o.started.size||o.on).map(o=>Object.assign(o,{n:o.done.size,pct:Math.round(o.done.size/o.total*100),full:o.done.size===o.total}))
     .sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:0);
 }
-function openBooks(list,who){
+function openBooks(list,who,ministryBooks){
   const mine=!list; list=list||booksSummary();
   if(mine&&!state.libSeen){state.libSeen=true;save();try{applyPtr()}catch(e){}}
   // Shared profiles use Firestore-safe objects; tolerate legacy tuples.
@@ -1467,7 +1467,15 @@ function openBooks(list,who){
   modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc);
   const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h,x);
   sheet.append(head);
-  const ms=mine?msShelf():[],byId=new Map(ms.map(o=>[o.id,o])),lsAll=ms.filter(o=>o.B.k==="ls"),oth=ms.filter(o=>o.B.k!=="ls");
+  // В библиотеке друга берём только опубликованный краткий прогресс.
+  // Отсутствие поля у старой версии — не ноль прочитанных книг.
+  const ministryKnown=mine||Array.isArray(ministryBooks);
+  const ms=mine?msShelf():(Array.isArray(ministryBooks)?ministryBooks:[]).map(x=>{
+    const B=x&&msBook(x.id);if(!B)return null;
+    const total=B.m.length,n=Math.max(0,Math.min(total,Math.floor(Number(x.n)||0)));
+    return {id:x.id,B,total,n,last:typeof x.last==="string"?x.last:"",full:n===total,pct:total?Math.round(n/total*100):0};
+  }).filter(Boolean).sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:0);
+  const byId=new Map(ms.map(o=>[o.id,o])),lsAll=ms.filter(o=>o.B.k==="ls"),oth=ms.filter(o=>o.B.k!=="ls");
   const nB=read.size,nLs=lsAll.filter(o=>o.full).length;
   // итоги: по одной плитке на каждую часть шкафа
   const sum=el("div","libsum");
@@ -1506,53 +1514,61 @@ function openBooks(list,who){
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
-  // ниже шкафа — подробности в том же порядке
-  if(mine){
-    const item=o=>{const li=el("div","msbk"+(o.full?" full":""));const tx=el("div","msbt");
-      tx.append(el("b",null,o.B.t),el("span",null,(o.full?"прочитана целиком":o.n+" из "+o.total+" "+(o.B.k==="ls"?"сообщений":"глав"))+(o.last?" · "+(o.full?fmtLong(o.last):"последнее — "+fmtLong(o.last)):"")));
-      const pc=el("span","msbp"+(o.full?" ok":o.on?" on":""),o.full?"✓":o.on?"читаю":"пауза");
-      const br=el("div","msbbar"),bi=el("i");bi.style.width=Math.max(o.n?2:0,o.pct)+"%";br.append(bi);
-      const top=el("div","msbtop");top.append(tx,pc);li.append(top,br);return li};
-    if(ms.length){sheet.append(el("div","plab","Книги служения — читаю и прочитано"));const l=el("div","msbl");lsAll.concat(oth).forEach(o=>l.append(item(o)));sheet.append(l)}
-    else sheet.append(el("p","hint","Жизнеизучение и другие книги добавляются в «Расписаниях» → «＋ Добавить» → «Книга служения»."))}
-  // Две компактные колонки — только список прочитанных книг.
-  // Книжную полку выше, источники дат и порядок прочтения не изменяем.
-  if(nB){
-    const months=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
-    const shortDate=d=>{const v=parse(d);return Number.isFinite(v.getTime())?v.getDate()+" "+months[v.getMonth()]+" "+v.getFullYear():String(d||"")};
-    const latest=list.slice().sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:0);
-    const grid=el("div","bsread-grid");
-    [["ot","Ветхий Завет",39],["nt","Новый Завет",27]].forEach(([testament,title,total])=>{
-      const items=latest.filter(([a])=>BOOK[a]&&BOOK[a].t===testament);
-      const col=el("section","bsread-col");
-      col.setAttribute("aria-label",title+": "+items.length+" из "+total);
-      const heading=el("div","bsread-head");
-      heading.append(el("h3",null,title),el("span",null,items.length+" / "+total));
-      const rows=el("div","bsread-list");
-      const LIMIT=4;
-      items.forEach(([a,d,c],i)=>{
-        const b=BOOK[a],item=el("div","bsread-item");
-        item.hidden=i>=LIMIT;
-        item.title=b.n+" — прочитана "+fmtLong(d)+(c>1?" · "+c+" "+plural(c,"раз","раза","раз"):"");
-        const mark=el("i","bsread-mark");mark.style.backgroundColor=SECCOL[b.s];
-        const content=el("div","bsread-detail"),name=el("b","bsread-name",b.n),when=el("span","bsread-when",shortDate(d));
-        content.append(name,when);item.append(mark,content);rows.append(item);
-      });
-      col.append(heading,rows);
-      if(items.length>LIMIT){
-        const expand=el("button","bsread-toggle","Показать все ("+items.length+")");expand.type="button";
-        let expanded=false;expand.setAttribute("aria-expanded","false");
-        expand.addEventListener("click",()=>{
-          expanded=!expanded;[...rows.children].forEach((item,i)=>{item.hidden=!expanded&&i>=LIMIT});
-          expand.textContent=expanded?"Свернуть":"Показать все ("+items.length+")";
-          expand.setAttribute("aria-expanded",String(expanded));
-        });
-        col.append(expand);
-      }
-      grid.append(col);
+  // Четыре компактные ячейки по два столбца: Библия, Жизнеизучения, книги служения.
+  // Вся большая книжная полка и её функции остаются выше без изменений.
+  const months=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+  const shortDate=d=>{if(!d)return "";const v=parse(d);return Number.isFinite(v.getTime())?v.getDate()+" "+months[v.getMonth()]+" "+v.getFullYear():String(d)};
+  const grid=el("div","bsread-grid");
+  const LIMIT=4;
+  function readingColumn(title,count,of,items,kind){
+    const col=el("section","bsread-col bsread-"+kind);
+    col.setAttribute("aria-label",title+": "+(of?count+" из "+of:count+" книг"));
+    const hd=el("div","bsread-head"),h=el("h3",null,title);
+    hd.append(h,el("span",null,of?count+" / "+of:count+" книг"));
+    const rows=el("div","bsread-list");
+    items.forEach((record,i)=>{
+      const item=el("div","bsread-item");item.hidden=i>=LIMIT;
+      const mark=el("i","bsread-mark"),detail=el("div","bsread-detail");
+      mark.style.backgroundColor=record.color;
+      const name=el("b","bsread-name",record.name),when=el("span","bsread-when",record.date);
+      item.title=record.tooltip||record.name;
+      detail.append(name,when);item.append(mark,detail);rows.append(item);
     });
-    sheet.append(el("div","plab","Книги по порядку чтения"),grid);
-  }else sheet.append(el("p","hint",mine?"Ни одна книга Библии пока не прочитана целиком.":"Пока ни одной книги Библии целиком."));
+    if(!items.length)rows.append(el("p","bsread-empty",!ministryKnown&&(kind==="ls"||kind==="other")?"Данные ещё не обновлены":"Пока нет книг"));
+    col.append(hd,rows);
+    if(items.length>LIMIT){
+      const expand=el("button","bsread-toggle","Показать все ("+items.length+")");expand.type="button";
+      let expanded=false;expand.setAttribute("aria-expanded","false");
+      expand.addEventListener("click",()=>{
+        expanded=!expanded;[...rows.children].forEach((item,i)=>{item.hidden=!expanded&&i>=LIMIT});
+        expand.textContent=expanded?"Свернуть":"Показать все ("+items.length+")";
+        expand.setAttribute("aria-expanded",String(expanded));
+      });
+      col.append(expand);
+    }
+    grid.append(col);
+  }
+  const latest=list.slice().sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:0);
+  [["ot","Ветхий Завет",39],["nt","Новый Завет",27]].forEach(([testament,title,total])=>{
+    const books=latest.filter(([a])=>BOOK[a]&&BOOK[a].t===testament);
+    const items=books.map(([a,d,c])=>{const b=BOOK[a];return {
+      name:b.n,date:shortDate(d),color:SECCOL[b.s],
+      tooltip:b.n+" — прочитана "+fmtLong(d)+(c>1?" · "+c+" "+plural(c,"раз","раза","раз"):"")
+    }});
+    readingColumn(title,items.length,total,items,testament);
+  });
+  // Для Жизнеизучений и других книг показываем как завершённые, так и начатые.
+  // Даты берём из фактических отметок — не из планового расписания.
+  [[lsAll,"Жизнеизучения","ls","#9d73e9",MSB.ls.length],
+    [oth,"Другие книги служения","other","#26a8a0",0]].forEach(([books,title,kind,color,total])=>{
+    const complete=books.filter(o=>o.full).length;
+    const items=books.map(o=>({
+      name:o.B.t,color,date:o.full?(shortDate(o.last)||"Прочитано"):(o.n?o.n+" из "+o.total+" · "+(shortDate(o.last)||"в процессе"):"Начато"),
+      tooltip:o.B.t+" · "+(o.full?"прочитана":o.n+" из "+o.total+" "+(kind==="ls"?"сообщений":"глав"))+(o.last?" · "+fmtLong(o.last):"")
+    }));
+    readingColumn(title,complete,total,items,kind);
+  });
+  sheet.append(el("div","plab","Книги по порядку чтения"),grid);
   if(mine){const nb=nextBookHint();if(nb)sheet.append(el("p","bsnext","Ближе всего: «"+(FULL[nb.b]||nb.b)+"» — осталось "+nb.left+" "+plural(nb.left,"день","дня","дней")+" чтения"))}
   modal.append(sheet);document.body.append(modal);
 }
@@ -2492,6 +2508,9 @@ function summary(){
   // internal [book, date, times] tuples, but publish maps to friends.
   // After completing Genesis this used to make the whole reading batch fail.
   try{out.books=booksSummary().map(([a,d,n])=>({a,d,n}))}catch(e){out.books=[]}
+  // Краткая публичная библиотека книг служения для профилей друзей.
+  // Без журналов/страниц: только название из каталога, объём и дата чтения.
+  try{out.ministryBooks=msShelf().map(o=>({id:o.id,n:o.n,last:o.last}))}catch(e){out.ministryBooks=[]}
   KEYS.forEach(k=>{const p=Math.min(out[k+"Next"],DAYS-1);out[k+"Ref"]=out[k+"Next"]>=DAYS?"":refStr(part(k,p));out[k+"Url"]=chapterUrl(part(k,p));out[k+"Label"]=T[k].label;out[k+"Days"]=DAYS});
   ["nt","ot"].forEach(k=>{if(!KEYS.includes(k)){const o=KEYS[0];["Streak","Next","Read","Last","Ahead"].forEach(f=>out[k+f]=out[o+f])}}); // для старых версий у друзей
   try{out.conf=confSummary()}catch(e){}
@@ -3917,7 +3936,7 @@ window.Ogonek={
     const u=applyFreezes();render();if(u)toast("Заморозка сохранила вашу серию");},
   setRemote(fn){remoteSave=fn},
   progressLoaded(){window.__ogLoaded=true;try{applyNoPlan()}catch(e){}setTimeout(()=>{try{churchRepair()}catch(e){}},60)},
-  openPlans:()=>openPlans(), openFinished:(list,who)=>openFinished(list,who), finishedCount:()=>(state.finished||[]).length, openPlanEditor:()=>openPlanEditor(), myPlansCount:()=>myPlanList().length, openBooks:(list,who)=>openBooks(list,who), booksCount:()=>booksSummary().length, planId:SCHED.id, planName:SCHED.name, keysAll:["nt","ot"],
+  openPlans:()=>openPlans(), openFinished:(list,who)=>openFinished(list,who), finishedCount:()=>(state.finished||[]).length, openPlanEditor:()=>openPlanEditor(), myPlansCount:()=>myPlanList().length, openBooks:(list,who,ministryBooks)=>openBooks(list,who,ministryBooks), booksCount:()=>booksSummary().length, planId:SCHED.id, planName:SCHED.name, keysAll:["nt","ot"],
   toast
 };
 

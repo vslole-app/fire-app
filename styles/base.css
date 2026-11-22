@@ -1203,26 +1203,34 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .gsheet .ogsex.arm{color:var(--ink)}
 .ogsex small{display:block;font-size:.72rem;font-weight:700;opacity:.85;margin-top:2px}
 
-/* Библиотека: прочитанные книги по датам — два столбца, полку не затрагиваем. */
-.bsread-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
-.bsread-col{display:flex;flex-direction:column;min-width:0;gap:7px;padding:8px 7px 9px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
-.bsread-head{display:flex;align-items:baseline;justify-content:space-between;gap:3px;min-height:31px}
-.bsread-head h3{margin:0;min-width:0;font-family:var(--display);font-size:1.03rem;line-height:1.1;font-weight:700;color:var(--ink)}
-.bsread-head span{flex:none;color:var(--muted);font-size:.74rem;font-weight:700;white-space:nowrap}
-.bsread-list{display:flex;flex-direction:column;gap:5px;min-width:0}
-.bsread-item{display:flex;gap:6px;min-width:0;align-items:stretch;padding:7px 6px;border-radius:9px;background:var(--bg)}
-.bsread-item[hidden]{display:none}
-.bsread-mark{flex:0 0 4px;align-self:stretch;border-radius:3px;min-height:30px}
-.bsread-detail{display:flex;flex-direction:column;min-width:0;flex:1;gap:3px}
-.bsread-name{font-size:.79rem;line-height:1.2;font-weight:700;color:var(--ink);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.bsread-when{color:var(--muted);font-size:.7rem;line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums}
-.bsread-toggle{margin-top:auto;width:100%;padding:7px 3px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--link);font:inherit;font-size:.73rem;font-weight:700;cursor:pointer}
-.bsread-toggle:hover,.bsread-toggle:focus-visible{border-color:var(--link)}
-/* Второй ряд библиотеки: Жизнеизучения и другие книги служения. */
-.bsread-col.bsread-ls{border-color:color-mix(in srgb,#9d73e9 45%,var(--line))}
-.bsread-col.bsread-other{border-color:color-mix(in srgb,#26a8a0 45%,var(--line))}
-.bsread-col.bsread-ls .bsread-head h3,.bsread-col.bsread-other .bsread-head h3{font-size:.95rem;overflow-wrap:anywhere}
-.bsread-col.bsread-ls .bsread-when,.bsread-col.bsread-other .bsread-when{white-space:normal;overflow-wrap:anywhere}
-.bsread-empty{margin:0;padding:8px 4px;color:var(--muted);font-size:.74rem;line-height:1.3}
-
-@media (max-width:360px){.bsread-grid{gap:5px}.bsread-col{padding:7px 5px}.bsread-head h3{font-size:.92rem}.bsread-head span{font-size:.68rem}.bsread-item{gap:4px;padding:6px 4px}.bsread-name{font-size:.74rem}.bsread-when{font-size:.67rem}}
+/* Библиотека: визуальный маршрут и прогноз чтения. Книжные полки не меняем. */
+.libroute-title{margin:7px 0 0;font-family:var(--display);font-size:1.3rem;font-weight:700;color:var(--ink)}
+.libroute-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.libroute-stat{display:flex;align-items:center;gap:6px;min-width:0;padding:9px 7px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(155deg,color-mix(in srgb,var(--link) 9%,var(--surface)),var(--surface))}
+.libroute-icon{flex:none;font-size:1.15rem;line-height:1;color:var(--link)}
+.libroute-statbody{display:flex;flex-direction:column;gap:3px;min-width:0}
+.libroute-label{font-size:.7rem;color:var(--muted)}
+.libroute-statbody b{font-size:.83rem;font-weight:800;color:var(--ink);line-height:1.2;overflow-wrap:anywhere}
+.libroute-stat:nth-child(3) .libroute-statbody b{color:#f6c777}
+.libroute-scene{min-width:0;padding:10px 8px 9px;border:1px solid color-mix(in srgb,var(--link) 40%,var(--line));border-radius:15px;background:radial-gradient(ellipse at 70% 25%,rgba(99,83,168,.22),transparent 60%),linear-gradient(180deg,#202745,#161d36);overflow:hidden}
+.libroute-scene svg{display:block;width:100%;height:auto;overflow:visible}
+.libroute-note{margin:0 5px 3px;color:#b2b9d9;font-size:.68rem;line-height:1.4}
+.libroute-steps{display:flex;flex-direction:column;gap:8px}
+.libroute-steps h4{margin:1px 0 0;color:var(--ink);font-weight:800;font-size:1rem}
+.libroute-steprows{padding:2px 12px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
+.libroute-steprow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;column-gap:9px;padding:9px 0;min-height:32px}
+.libroute-steprow+.libroute-steprow{border-top:1px solid var(--line)}
+.libroute-stepico{color:var(--link);font-size:1.1rem;text-align:center}
+.libroute-stepname{font-size:.84rem;color:var(--muted)}
+.libroute-steprow b{max-width:160px;color:var(--ink);font-size:.9rem;line-height:1.25;text-align:right;overflow-wrap:anywhere}
+.libroute-disclaimer{margin:0 2px;color:var(--muted);font-size:.72rem;line-height:1.4}
+@media (max-width:390px){
+  .libroute-stats{gap:5px}
+  .libroute-stat{gap:4px;padding:7px 5px;align-items:flex-start}
+  .libroute-icon{font-size:1rem}
+  .libroute-label{font-size:.65rem}
+  .libroute-statbody b{font-size:.75rem}
+  .libroute-scene{padding:8px 4px 7px}
+  .libroute-note{font-size:.66rem}
+  .libroute-steprow{column-gap:6px}
+}

@@ -1741,7 +1741,7 @@ function celebrateNext(){
   const em=el("div","celemb");em.append(icoEl(f.emb||"book"));
   box.append(em,el("div","celk","Расписание прочитано!"),el("h2",null,"«"+f.name+"»"+(nth>1?" · "+nth+"-й раз":"")));
   const stt=el("div","celst");[[f.days,plural(f.days,"день","дня","дней")],[f.n||0,plural(f.n||0,"отрывок","отрывка","отрывков")]].forEach(([v,l])=>{const c=el("div");c.append(el("b",null,String(v)),el("span",null,l));stt.append(c)});
-  box.append(stt,el("p","celp",fmtLong(f.start)+" — "+fmtLong(f.end)),el("p","celp2","Сегодня оно ещё на главной — можно отменить отметку. Завтра оно само уйдёт в «Архив» (вкладка «Библиотека»)."));
+  box.append(stt,el("p","celp",fmtLong(f.start)+" — "+fmtLong(f.end)),el("p","celp2","Сегодня оно ещё на главной — можно отменить отметку. Завтра оно само уйдёт в «Архив» в меню профиля."));
   const ok=el("button","btn-main","Отлично! 🎉");ok.type="button";
   const done=()=>{f.cel=true;ov.classList.add("out");setTimeout(()=>{ov.remove();celOpen=false;save();render();setTimeout(celebrateNext,300)},250)}; // уйдёт с главной завтра (finRetire)
   ok.addEventListener("click",done);box.append(ok);ov.append(box);document.body.append(ov);
@@ -2065,7 +2065,7 @@ function renderExtras(){
   if(lab){lab.hidden=noPlan()||!tracks().spb;lab.className="kmark "+(SCHED.spb?"k-spb":"k-my");lab.textContent="";lab.append(icoEl(SCHED.spb?"flame":myEmb(SCHED.def)),SCHED.spb?"Церковь":"Моё · "+SCHED.name)}
   {let ph=$("primFin");const pf=!SCHED.spb&&(state.finished||[]).some(f=>f.id===SCHED.id&&!f.gone);
     if(pf&&!ph){const hd=tc.querySelector(".reading-head");if(hd){ph=el("p","xfinhint");ph.id="primFin";hd.after(ph)}}
-    if(ph){ph.hidden=!pf;if(pf)ph.textContent="🎉 «"+SCHED.name+"» прочитано до конца! Сегодня ещё можно отменить отметку. Завтра расписание само уйдёт в «Архив» (вкладка «Библиотека»)."}}
+    if(ph){ph.hidden=!pf;if(pf)ph.textContent="🎉 «"+SCHED.name+"» прочитано до конца! Сегодня ещё можно отменить отметку. Завтра расписание само уйдёт в «Архив» в меню профиля."}}
   {const hd=tc.querySelector(".reading-head");let b=$("primMapBtn");
     const pOn=xmapOpen.has("__prim")&&!noPlan();
     if(hd&&!b&&!noPlan()){b=xmapBtn("__prim");b.id="primMapBtn";hd.append(b)}
@@ -2085,7 +2085,7 @@ function renderExtras(){
     if(id!=="spb"&&S.ms)hd.append(xmapBtn(id));
     card.append(hd);
     if(id!=="spb"&&S.ms&&xmapOpen.has(id)){try{const m=xmapEl(id);if(m)card.append(m)}catch(e){console.warn(e)}}
-    if(id!=="spb"&&(state.finished||[]).some(f=>f.id===id&&!f.gone)){card.classList.add("xfin");card.append(el("p","xfinhint","🎉 Прочитано до конца! Сегодня ещё можно отменить отметку. Завтра расписание само уйдёт в «Архив» (вкладка «Библиотека»)."))}
+    if(id!=="spb"&&(state.finished||[]).some(f=>f.id===id&&!f.gone)){card.classList.add("xfin");card.append(el("p","xfinhint","🎉 Прочитано до конца! Сегодня ещё можно отменить отметку. Завтра расписание само уйдёт в «Архив» в меню профиля."))}
     const tg=el("div","tgrid");
     S.keys.forEach(k=>{const tcd=el("div","tcard"),np=xNext(id,k),ti=dayNo(today())-dayNo(S.start),tod=xToday(id,k),done=tod.length>0;
       const th=el("div","thead");const hb=el("div","tht");hb.append(el("b",null,S.keys.length>1?S.labels[k]:"Сегодня"));th.append(hb);tcd.append(th);
@@ -2366,7 +2366,7 @@ function applyNoPlan(){
       const anchor=$("pageHead")||$("appTabs");if(anchor)anchor.after(c)}
     if(c){c.hidden=!np;c.classList.toggle("pg-off",pg!==page);
       if(np){const fin=noActive()&&(state.finished||[]).some(f=>f.gone);c.querySelector("h2").textContent=fin?"Расписание прочитано — выберите новое":"Выберите расписание, чтобы начать";
-        c.querySelector("p").textContent=fin?"Прочитанное сохранено в «Архиве» во вкладке «Библиотека». Выберите, что читать дальше.":"Своё расписание или общее расписание церкви в Санкт-Петербурге"}}});
+        c.querySelector("p").textContent=fin?"Прочитанное сохранено в «Архиве» в меню профиля. Выберите, что читать дальше.":"Своё расписание или общее расписание церкви в Санкт-Петербурге"}}});
   try{renderSchedList()}catch(e){console.warn(e)}
   {let u=$("undoCard");const can=!np&&canUndo();
     if(can&&!u){u=el("section","undocard");u.id="undoCard";u.dataset.page="home";const t=el("div","ptxt");t.append(el("b"),el("span",null,"Выбрали случайно? Пока ничего не прочитано, можно выбрать другое."));
@@ -3681,6 +3681,23 @@ function openArchive(){
     const b=el("button","fdre","Открыть");b.type="button";b.addEventListener("click",()=>{const m=sh.closest(".fmodal");if(m)m.remove();openConf("read")});
     li.append(ic,tx,b);ul.append(li);sh.append(ul)}}catch(e){console.warn(e)}
 }
+/* Награды доступны из меню имени пользователя, рядом с Архивом. */
+function openMyAwards(){
+  const modal=el("div","fmodal"),sheet=el("div","fsheet awards-sheet");
+  const close=()=>{modal.remove();document.removeEventListener("keydown",esc)};
+  const esc=e=>{if(e.key==="Escape")close()};
+  modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  document.addEventListener("keydown",esc);
+  const head=el("div","fhead"),x=el("button","fclose","×");
+  x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);
+  head.append(el("h2",null,"Мои награды"),x);
+  const total=awards(),won=total.filter(o=>o.ok).length;
+  sheet.append(head,el("p","hint","Получено "+won+" из "+total.length));
+  const badges=$("badges");
+  if(badges){const copy=badges.cloneNode(true);copy.removeAttribute("id");sheet.append(copy)}
+  else sheet.append(el("p","hint","Награды появятся здесь после чтения."));
+  modal.append(sheet);document.body.append(modal);
+}
 /* «Библиотека»: Мои книги → Достижения → Как читать Библию — одинаковые строки с иконками */
 function libLayout(){
   if(libLayout.done)return;libLayout.done=true;
@@ -4100,7 +4117,7 @@ window.Ogonek={
     const u=applyFreezes();render();if(u)toast("Заморозка сохранила вашу серию");},
   setRemote(fn){remoteSave=fn},
   progressLoaded(){window.__ogLoaded=true;try{applyNoPlan()}catch(e){}setTimeout(()=>{try{churchRepair()}catch(e){}},60)},
-  openPlans:()=>openPlans(), openFinished:(list,who)=>openFinished(list,who), finishedCount:()=>(state.finished||[]).length, openPlanEditor:()=>openPlanEditor(), myPlansCount:()=>myPlanList().length, openBooks:(list,who,ministryBooks)=>openBooks(list,who,ministryBooks), booksCount:()=>booksSummary().length, planId:SCHED.id, planName:SCHED.name, keysAll:["nt","ot"],
+  openPlans:()=>openPlans(), openFinished:(list,who)=>openFinished(list,who), openArchive:()=>openArchive(), openMyAwards:()=>openMyAwards(), finishedCount:()=>(state.finished||[]).length, openPlanEditor:()=>openPlanEditor(), myPlansCount:()=>myPlanList().length, openBooks:(list,who,ministryBooks)=>openBooks(list,who,ministryBooks), booksCount:()=>booksSummary().length, planId:SCHED.id, planName:SCHED.name, keysAll:["nt","ot"],
   toast
 };
 

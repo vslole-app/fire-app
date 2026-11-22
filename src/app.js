@@ -1563,9 +1563,10 @@ function openBooks(list,who,ministryBooks){
       fill:"#434764",stroke:"#9294bd","stroke-width":2,opacity:".85"}));return}
     const isLast=i===milestones.length-1;
     const {date,name,kind}=item,fullDate=date?shortDate(date):"дата не указана";
+    const dateText=date?"прочитана "+fullDate:"прочитана, дата не указана";
     const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point",
-      "aria-label":name+", прочитана "+fullDate});
-    group.append(sv("title",{},name+" · прочитана "+fullDate+
+      "aria-label":name+", "+dateText});
+    group.append(sv("title",{},name+" · "+dateText+
       (kind==="ls"?" · Жизнеизучение":kind==="ministry"?" · Книга служения":" · Библия")));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
       fill:isLast?"#29dcd0":"#a78beb",opacity:isLast?".19":".14"}));

@@ -759,9 +759,9 @@
         if(p[2]<.03)return;
         const x=cx+p[0]*R,y=cy-p[1]*R;
         if(e.kind==="bible"){
-          const scale=e === last ? .65 : .52;
+          const scale=e === last ? .75 : .62;
           window.OgonekProgressVisual.flame(ctx,x,y,scale,1);
-          occupied.push([x-5,y-12,x+5,y+4]);
+          occupied.push([x-6,y-13,x+6,y+4]);
         }else{
           ctx.fillStyle="#cfb4ff";ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fill();
           occupied.push([x-4,y-4,x+4,y+4]);

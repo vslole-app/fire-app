@@ -1562,7 +1562,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const bookDetail=el("div","reading-book-detail");
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
   const explain=el("p","reading-globe-hint",
-    "Вращайте глобус, приближайте и нажимайте на точки, чтобы увидеть книгу и дату.");
+    "Нажмите на участок прочитанной книги или отметку, чтобы увидеть дату.");
   sheet.append(heading,globeHost,bookDetail,explain);
   let globeCleanup=null;
   const mount=()=>{

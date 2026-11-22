@@ -676,7 +676,7 @@
     let yaw = -Math.atan2(focus[0], focus[2]), pitch = Math.asin(focus[1]) * 0.6;
     const initialYaw = yaw, initialPitch = pitch;
     let zoom = 1, sizeW = 0, sizeH = 0, dpr = 1, alive = true;
-    const maxZoom = 5, hit = [];
+    const maxZoom = 5, hit = [], landHits = [];
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const rotBook = v => {
       const a = Math.cos(yaw), b = Math.sin(yaw), c = Math.cos(pitch), d = Math.sin(pitch);
@@ -731,7 +731,8 @@
       if (!alive || !host.isConnected) return;
       const ctx = canvasContext, W = sizeW || 360, H = sizeH || 360;
       ctx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.fillStyle = "#090f29"; ctx.fillRect(0,0,W,H);
+      ctx.clearRect(0,0,W,H);
+      landHits.length = 0;
       const R = Math.min(W * 0.475, H * 0.475) * zoom, cx = W / 2, cy = H / 2;
       let g = ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R*1.22);
       g.addColorStop(0,"rgba(75,159,255,.5)");g.addColorStop(1,"rgba(75,159,255,0)");
@@ -751,6 +752,7 @@
           if(!book.poly.length)return;
           const landBook=new Path2D();
           if(!drawRing(landBook,book.poly,cx,cy,R))return;
+          landHits.push({book, area:landBook, coast:land});
           const k=rotBook(book.c),light=.55+.45*Math.max(0,dot(k,L));
           ctx.fillStyle="rgb("+book.col.map(v=>Math.round(v*light)).join(",")+")";
           const chosen = selected?.kind === "bible" && selected.v === book.c;
@@ -892,12 +894,20 @@
       const rect=canvas.getBoundingClientRect();
       const x=(ev.clientX-rect.left)*(sizeW/(rect.width||1));
       const y=(ev.clientY-rect.top)*(sizeH/(rect.height||1));
-      const target=hit.filter(q=>Math.hypot(q.x-x,q.y-y)<27)
+      const closestMarker = radius => hit.filter(q=>Math.hypot(q.x-x,q.y-y)<radius)
         .sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];
-      if(target&&typeof onSelect==="function") {
-        const nearby = hit.filter(q => Math.hypot(q.x-target.x,q.y-target.y)<8)
+      const marker = closestMarker(8);
+      const land = marker ? null : landHits.findLast(({area,coast}) =>
+        canvasContext.isPointInPath(area,x*dpr,y*dpr) &&
+        canvasContext.isPointInPath(coast,x*dpr,y*dpr));
+      const target = marker || (land ? null : closestMarker(27));
+      const picked = land
+        ? entries.find(e=>e.kind==="bible" && e.v===land.book.c)
+        : target?.e;
+      if(picked&&typeof onSelect==="function") {
+        const nearby = land ? [picked] : hit.filter(q => Math.hypot(q.x-target.x,q.y-target.y)<8)
           .map(q => q.e).sort((a,b) => b.date.localeCompare(a.date));
-        selected = target.e;
+        selected = picked;
         onSelect(nearby);
         draw();
       } else if (selected) {

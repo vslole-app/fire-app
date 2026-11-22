@@ -1481,7 +1481,7 @@ function bibleReadingHistory(validDate){
   }
   return [...events.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
-function openBooks(list,who,ministryBooks,embedded=false,openGlobeNow=!embedded){
+function openBooks(list,who,ministryBooks,embedded=false){
   const mine=!list; list=list||booksSummary();
   if(mine&&!state.libSeen){state.libSeen=true;save();try{applyPtr()}catch(e){}}
   // Shared profiles use Firestore-safe objects; tolerate legacy tuples.
@@ -1565,57 +1565,28 @@ function openBooks(list,who,ministryBooks,embedded=false,openGlobeNow=!embedded)
     "Нажмите на участок прочитанной книги или отметку, чтобы увидеть дату.");
   const globePanel=el("div","reading-globe-panel");
   globePanel.append(globeHost,bookDetail);
-  const expandGlobe=el("button","btn","Открыть глобус");
-  expandGlobe.type="button";
-  expandGlobe.setAttribute("aria-haspopup","dialog");
-  const globeWindow=el("dialog","reading-globe-window");
-  globeWindow.setAttribute("aria-label","Мой путь чтения");
-  const windowHead=el("div","reading-globe-window-head");
-  const closeGlobe=el("button","btn","Закрыть");
-  closeGlobe.type="button";
-  windowHead.append(el("h3",null,"Мой путь чтения"),closeGlobe);
-  globeWindow.append(windowHead,globePanel,explain);
-  let destroyMap=null;
+  sheet.append(heading,globePanel,explain);
+  let globeCleanup=null;
   const mount=()=>{
-    if(!globeWindow.open||destroyMap)return;
+    if(!globeHost.isConnected||globeCleanup)return;
     const G=window.OgonekGlobe;
     if(!G||typeof G.mountReading!=="function"){setTimeout(mount,180);return}
     globeHost.textContent="";
-    destroyMap=G.mountReading(globeHost,history,route,items=>{
+    globeCleanup=G.mountReading(globeHost,history,route,items=>{
       bookDetail.hidden=false;
       bookDetail.replaceChildren(...items.flatMap(item=>[
         el("b",null,item.name),el("span",null,"Прочитана "+fmtLong(item.date))
       ]));
+      bookDetail.scrollIntoView({block:"nearest"});
     });
+    if(embedded)window.__readingGlobeDestroy=globeCleanup;
   };
-  const showGlobe=()=>{
-    if(globeWindow.open)return;
-    document.body.append(globeWindow);
-    globeWindow.showModal();
-    mount();
-  };
-  const globeCleanup=()=>{
-    if(globeWindow.open)globeWindow.close();
-    destroyMap?.();
-    destroyMap=null;
-    bookDetail.hidden=true;
-    globeWindow.remove();
-  };
-  expandGlobe.addEventListener("click",showGlobe);
-  closeGlobe.addEventListener("click",()=>globeWindow.close());
-  globeWindow.addEventListener("keydown",ev=>{if(ev.key==="Escape")ev.stopPropagation()});
-  globeWindow.addEventListener("close",()=>{
-    if(globeWindow.open||!globeWindow.isConnected)return;
-    globeCleanup();
-    if(expandGlobe.isConnected)expandGlobe.focus({preventScroll:true});
-  });
-  sheet.append(heading,expandGlobe);
   if(embedded){
     if(typeof window.__readingGlobeDestroy==="function")window.__readingGlobeDestroy();
-    window.__readingGlobeDestroy=globeCleanup;
+    window.__readingGlobeDestroy=null;
     const holder=$("libraryInline");if(holder)holder.replaceChildren(sheet);
   }else{modal.append(sheet);document.body.append(modal)}
-  if(openGlobeNow)showGlobe();
+  mount();
 }
 /* ---------- пройденные расписания и управление своими расписаниями ---------- */
 // расписание пройдено, когда прочитаны все его дни; запоминаем это навсегда (даже если расписание потом удалить)
@@ -3504,7 +3475,7 @@ function pathCenterMe(smooth){const pb=$("pathBox");if(!pb||!pb.offsetParent)ret
 function pathFocusSoon(){const pb=$("pathBox");if(pb){delete pb.dataset.touched;delete pb.dataset.ctouched}
   requestAnimationFrame(()=>requestAnimationFrame(()=>pathCenterMe(false)));setTimeout(()=>pathCenterMe(false),250)}
 function setPage(p){if(p==="plan")schedView="";
-  curPage=p;try{sessionStorage.setItem("ogonek-page",p)}catch(e){}applyPage(p==="awards");window.scrollTo({top:0});if(p==="home")pathFocusSoon();
+  curPage=p;try{sessionStorage.setItem("ogonek-page",p)}catch(e){}applyPage();window.scrollTo({top:0});if(p==="home")pathFocusSoon();
 }
 
 /* ---------- настройки уведомлений: напоминания (если огонёк ещё не горит) и уведомления от друзей ----------
@@ -3627,19 +3598,18 @@ function libLayout(){
   const oldArchive=$("archCard");if(oldArchive)oldArchive.remove();
   const oldProgress=document.querySelector(".lprog");if(oldProgress)oldProgress.remove();
 }
-function showInlineLibrary(openGlobeNow){
-  if(!$("libraryInline")||document.querySelector(".reading-globe-window[open]"))return;
-  openBooks(null,null,null,true,openGlobeNow);
+function showInlineLibrary(){
+  if(!$("libraryInline"))return;
+  openBooks(null,null,null,true);
 }
-function applyPage(openLibraryGlobe=false){
+function applyPage(){
   pagesSetup();
   const list=PAGES_SPB;
   if(!list.some(x=>x[0]===curPage)||curPage==="quiz"||curPage==="games")curPage="home";
 
   document.querySelectorAll(".app>[data-page]").forEach(n=>n.classList.toggle("pg-off",n.dataset.page!==curPage));
-  const enteringLibrary=curPage==="awards"&&document.body.dataset.page!=="awards";
   document.body.dataset.page=curPage;
-  if(curPage==="awards")try{showInlineLibrary(openLibraryGlobe||enteringLibrary)}catch(e){console.warn("Could not render inline library",e)}
+  if(curPage==="awards")try{showInlineLibrary()}catch(e){console.warn("Could not render inline library",e)}
   const ph=$("pageHead");const it=list.find(x=>x[0]===curPage);ph.hidden=true;const h1=document.querySelector(".app>.top .brand h1");if(h1)h1.textContent=curPage==="home"?"В Слове":it[2];
   // друзья: если вход не выполнен — подсказка вместо пустоты
   const fe=$("friendsEmpty");if(fe){let was=false;try{was=!!localStorage.getItem("ogonek-owner")}catch(e){}const has=!$("friendsCard").hidden||was;fe.hidden=has;const login=$("loginTop"),can=login&&!login.hidden;

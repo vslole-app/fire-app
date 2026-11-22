@@ -1517,16 +1517,16 @@ function openBooks(list,who,ministryBooks){
   // Визуальный маршрут чтения. Данные, даты и темп — из реально
   // завершённых книг; путь на рисунке условный, не календарная шкала.
   const dated=list
-    .filter(([a,d])=>BOOK[a]&&typeof d==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(d)&&d<=today())
+    .filter(([a,d])=>BOOK[a]&&typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today())
     .sort((a,b)=>a[1]<b[1]?-1:a[1]>b[1]?1:0);
   const totalBooks=66,doneBooks=Math.min(totalBooks,read.size),leftBooks=totalBooks-doneBooks;
-  const first=dated[0],last=dated[dated.length-1],days=first?Math.max(1,dayNo(today())-dayNo(first[1])+1):0;
+  const first=dated[0],days=first?Math.max(1,dayNo(today())-dayNo(first[1])+1):0;
   const canForecast=doneBooks>=3&&dated.length>=3&&days>=14&&leftBooks>0;
   const perMonth=canForecast?(dated.length/days)*30.44:0;
   const daysRemaining=canForecast?Math.ceil(leftBooks*days/dated.length):0;
   // Далёкий/нестабильный прогноз лучше не показывать как точную дату.
   const finish=doneBooks===totalBooks?"Завершено":canForecast&&daysRemaining<=3650
-    ?parse(add(today(),daysRemaining)).toLocaleDateString("ru-RU",{month:"short",year:"numeric"})
+    ?"~ "+parse(add(today(),daysRemaining)).toLocaleDateString("ru-RU",{month:"short",year:"numeric"})
     :"Пока нет прогноза";
   const duration=canForecast&&daysRemaining<=3650?(daysRemaining<60
     ?Math.ceil(daysRemaining/7)+" "+plural(Math.ceil(daysRemaining/7),"неделя","недели","недель")
@@ -1563,7 +1563,7 @@ function openBooks(list,who,ministryBooks){
   svg.append(sv("circle",{cx:38,cy:150,r:11,fill:"#73abfc",opacity:".18"}));
   svg.append(sv("circle",{cx:38,cy:150,r:6,fill:"#87b9ff",stroke:"#dceaff","stroke-width":2}));
   if(first){
-    svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},shortDate(first[1]).replace(/ \\d{4}$/,"")));
+    svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},shortDate(first[1]).replace(/ \d{4}$/,"")));
   }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
   // Последние пять реальных завершённых книг — только из списка пользователя.
   const milestones=dated.slice(-5);
@@ -1574,21 +1574,21 @@ function openBooks(list,who,ministryBooks){
     group.append(sv("title",{},BOOK[id].n+" · "+shortDate(date)));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?12:8,fill:isLast?"#32d6c9":"#ad91ed",opacity:".2"}));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:4.4,fill:isLast?"#55e4d5":"#d2b9ff",stroke:"#f7eeff","stroke-width":1.8}));
-    const raw=(BOOK[id].a||id).replace(/\\.$/,"");
+    const raw=(BOOK[id].a||id).replace(/\.$/,"");
     const label=raw.length>10?raw.slice(0,9)+"…":raw;
-    const w=Math.min(80,Math.max(37,label.length*7.2+12));
-    const ly=(i%2===0?y-37:y+15);
-    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:22,rx:8,fill:isLast?"#185f64":"#302b54",stroke:isLast?"#48dbcf":"#8b78ba","stroke-width":1.3}));
-    group.append(sv("text",{x,y:ly+15,fill:"#f5f5ff","font-size":12,"font-weight":"600","text-anchor":"middle"},label));
+    const w=Math.min(86,Math.max(39,label.length*8.5+14));
+    const ly=(i%2===0?y-39:y+14);
+    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:26,rx:8,fill:isLast?"#185f64":"#302b54",stroke:isLast?"#48dbcf":"#8b78ba","stroke-width":1.3}));
+    group.append(sv("text",{x,y:ly+18,fill:"#f5f5ff","font-size":15,"font-weight":"600","text-anchor":"middle"},label));
     svg.append(group);
   });
   // Флажок и конец маршрута — это цель, не зафиксированный факт.
   svg.append(sv("path",{d:"M522 81 L522 31",stroke:"#ffe0a5","stroke-width":2.7}));
   svg.append(sv("path",{d:"M523 31 Q535 25 545 34 L536 48 L523 45Z",fill:"#f6ae4b"}));
   svg.append(sv("circle",{cx:522,cy:81,r:8,fill:doneBooks===66?"#55e4d5":"#f9ba64",stroke:"#ffe4ae","stroke-width":2}));
-  svg.append(sv("rect",{x:472,y:103,width:77,height:29,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
-  svg.append(sv("text",{x:510,y:115,fill:"#ffe29a","font-size":11,"font-weight":"700","text-anchor":"middle"},"Вся"));
-  svg.append(sv("text",{x:510,y:126,fill:"#ffe29a","font-size":11,"font-weight":"700","text-anchor":"middle"},"Библия"));
+  svg.append(sv("rect",{x:468,y:103,width:82,height:36,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
+  svg.append(sv("text",{x:509,y:118,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Вся"));
+  svg.append(sv("text",{x:509,y:133,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Библия"));
   scene.append(svg,el("p","libroute-note",!dated.length?"Начните чтение — здесь появятся отметки прочитанных книг.":"Путь условный · точки — завершённые книги"+(canForecast?" · прогноз по текущему темпу":"")));
   sheet.append(scene);
   const steps=el("div","libroute-steps");

@@ -1454,7 +1454,7 @@ function msShelf(){
   return Object.values(out).filter(o=>o.started.size||o.on).map(o=>Object.assign(o,{n:o.done.size,pct:Math.round(o.done.size/o.total*100),full:o.done.size===o.total}))
     .sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:0);
 }
-function openBooks(list,who,ministryBooks){
+function openBooks(list,who,ministryBooks,embedded=false){
   const mine=!list; list=list||booksSummary();
   if(mine&&!state.libSeen){state.libSeen=true;save();try{applyPtr()}catch(e){}}
   // Shared profiles use Firestore-safe objects; tolerate legacy tuples.
@@ -1462,10 +1462,10 @@ function openBooks(list,who,ministryBooks){
   list=list.map(x=>Array.isArray(x)?x:[x&&x.a,x&&x.d,x&&x.n])
     .filter(x=>typeof x[0]==="string"&&x[0]);
   const read=new Map(list.map(x=>[x[0],x]));
-  const modal=el("div","fmodal"),sheet=el("div","fsheet bshelf lib");sheet.setAttribute("role","dialog");sheet.setAttribute("aria-modal","true");sheet.setAttribute("aria-label",mine?"Моя библиотека":"Библиотека");
-  const close=()=>{modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
-  modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc);
-  const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h,x);
+  const modal=embedded?null:el("div","fmodal"),sheet=el("section","fsheet bshelf lib"+(embedded?" lib-embedded":""));if(!embedded){sheet.setAttribute("role","dialog");sheet.setAttribute("aria-modal","true")}sheet.setAttribute("aria-label",mine?"Моя библиотека":"Библиотека");
+  const close=()=>{if(!modal)return;modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
+  if(modal){modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc)}
+  const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h);if(!embedded)head.append(x);
   sheet.append(head);
   // В библиотеке друга берём только опубликованный краткий прогресс.
   // Отсутствие поля у старой версии — не ноль прочитанных книг.
@@ -1698,7 +1698,8 @@ function openBooks(list,who,ministryBooks){
   updateZoom();
   scene.append(svg,zoomRow,routeInfo);
   sheet.append(scene);
-  modal.append(sheet);document.body.append(modal);
+  if(embedded){const holder=$("libraryInline");if(holder)holder.replaceChildren(sheet)}
+  else{modal.append(sheet);document.body.append(modal)}
 }
 /* ---------- пройденные расписания и управление своими расписаниями ---------- */
 // расписание пройдено, когда прочитаны все его дни; запоминаем это навсегда (даже если расписание потом удалить)

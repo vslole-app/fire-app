@@ -115,17 +115,16 @@
     <div class="friends" id="friendsList"></div>
   </section>
 
+  <details class="card fold gems" id="gemsCard">
+    <summary class="foldhead"><h2><span class="gemicon big" aria-hidden="true"></span>Алмазы</h2><span class="gemsum" id="gemSum"></span><span class="gemcount" id="gemCount">0</span><span class="chev" aria-hidden="true"></span></summary>
+    <div class="foldbody"><div id="gemsBody"></div></div>
+  </details>
   <section class="library-inline" id="libraryInline" data-page="awards" aria-label="Моя библиотека"></section>
   <button class="card libcard" id="libCard" type="button" aria-label="Открыть «Мою библиотеку»">
     <span class="libico" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
     <span class="libtx"><b>Моя библиотека</b><span id="libSub">Библия, Жизнеизучение и книги служения</span></span>
     <span class="libgo" aria-hidden="true">›</span>
   </button>
-  <details class="card fold gems" id="gemsCard">
-    <summary class="foldhead"><h2><span class="gemicon big" aria-hidden="true"></span>Алмазы</h2><span class="gemsum" id="gemSum"></span><span class="gemcount" id="gemCount">0</span><span class="chev" aria-hidden="true"></span></summary>
-    <div class="foldbody"><div id="gemsBody"></div></div>
-  </details>
-
   <details class="card fold" id="schedule" open>
     <summary class="foldhead"><h2 id="schedTitle">Мои расписания</h2><span class="chev" aria-hidden="true"></span></summary>
     <div class="foldbody">
@@ -282,7 +281,7 @@
 <script type="module" src="auth.js?v=20261122-profile-archive-awards"></script>
 
 <script>/* автообновление: если на сайте вышла новая версия, а браузер показал старую из кэша — перезагрузить */
-(function(){var B="20261122210001";function chk(){try{/* сначала крошечный version.json (≈30 байт), если его нет — как раньше, весь index.html */fetch("version.json?b="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).catch(function(){return fetch("index.html?b="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():""})}).then(function(t){var m=/(?:var B=|"B":)\s*"(\d+)"/.exec(t);if(m&&m[1]>B){try{if(sessionStorage.getItem("ogonek-upd")===m[1])return;sessionStorage.setItem("ogonek-upd",m[1])}catch(e){}location.reload()}}).catch(function(){})}catch(e){}}
+(function(){var B="20261122210002";function chk(){try{/* сначала крошечный version.json (≈30 байт), если его нет — как раньше, весь index.html */fetch("version.json?b="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).catch(function(){return fetch("index.html?b="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():""})}).then(function(t){var m=/(?:var B=|"B":)\s*"(\d+)"/.exec(t);if(m&&m[1]>B){try{if(sessionStorage.getItem("ogonek-upd")===m[1])return;sessionStorage.setItem("ogonek-upd",m[1])}catch(e){}location.reload()}}).catch(function(){})}catch(e){}}
 setTimeout(chk,1500);document.addEventListener("visibilitychange",function(){if(!document.hidden)chk()})})();</script>
 <script src="src/keyboard.js?v=refactor1"></script>
 </body>

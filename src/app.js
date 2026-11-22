@@ -1548,7 +1548,7 @@ function openBooks(list,who,ministryBooks){
   milestones.forEach(([id,date],i)=>{
     const [x,y]=positions[i],isLast=i===milestones.length-1;
     const name=BOOK[id].n,fullDate=shortDate(date);
-    const group=sv("g",{"aria-label":name+", прочитана "+fullDate});
+    const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point","aria-label":name+", прочитана "+fullDate});
     group.append(sv("title",{},name+" · прочитана "+fullDate));
     // Подсветка всех пройденных книг, у самой новой пламя ярче.
     group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
@@ -1557,7 +1557,7 @@ function openBooks(list,who,ministryBooks){
       fill:isLast?"#35e6d7":"#a98ced",opacity:".28"}));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:5,
       fill:isLast?"#59f0e4":"#d3bcff",stroke:"#ffffff","stroke-width":1.8}));
-    const raw=(BOOK[id].a||id).replace(/\\.$/,"");
+    const raw=(BOOK[id].a||id).replace(/\.$/,"");
     const label=raw.length>10?raw.slice(0,9)+"…":raw;
     const dateLabel=parse(date).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit"});
     const w=Math.min(90,Math.max(68,label.length*8.4+15));

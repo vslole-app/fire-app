@@ -201,7 +201,6 @@ function render(){
   });
   try{renderExtras()}catch(e){console.warn(e)}
   try{applyNoPlan()}catch(e){console.warn(e)}
-  if(document.body.dataset.page==="awards")try{showInlineLibrary()}catch(e){console.warn(e)}
 }
 
 /* ---------- pace: days ahead of / behind the plan ---------- */

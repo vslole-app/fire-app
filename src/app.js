@@ -201,6 +201,7 @@ function render(){
   });
   try{renderExtras()}catch(e){console.warn(e)}
   try{applyNoPlan()}catch(e){console.warn(e)}
+  if(document.body.dataset.page==="awards")try{showInlineLibrary()}catch(e){console.warn(e)}
 }
 
 /* ---------- pace: days ahead of / behind the plan ---------- */
@@ -1414,10 +1415,10 @@ function autoName(set){const a=BOOKS.filter(b=>set.has(b.a)),sh=b=>b.n.replace(/
 function part2(S,k,p){const d=S.plan[Math.min(p,S.plan.length-1)];return k==="nt"&&d[4]?{book:d[0],ref:d[1],url:d[4],title:d[5]}:{book:d[T[k].bi],ref:d[T[k].ri]}}
 function SCHED_SPB(){return buildSched({id:"spb"})}
 $("planOpen").addEventListener("click",openPlans);
-$("booksOpen").addEventListener("click",()=>openBooks());
-$("libCard").addEventListener("click",()=>openBooks());
+$("booksOpen").addEventListener("click",()=>setPage("awards"));
+$("libCard").addEventListener("click",()=>setPage("awards"));
 /* ссылка с #library сразу открывает библиотеку */
-if(location.hash==="#library")setTimeout(()=>{try{setPage("awards")}catch(e){}openBooks()},400);
+if(location.hash==="#library")setTimeout(()=>{try{setPage("awards")}catch(e){}},400);
 /* ---------- книжная полка: прочитанные книги и когда они дочитаны ---------- */
 // книга прочитана, когда отмечены все её дни подряд в расписании; дата — день, когда отмечен последний из них
 function booksFinished(){
@@ -3564,13 +3565,14 @@ function pagesSetup(){
   [$("heroFlame")&&$("heroFlame").closest(".card"),$("testaments")&&$("testaments").closest(".card"),$("quizCard"),$("calendarCard"),$("progCard"),$("gemsCard"),$("awardsCard"),$("guideOpen")].forEach(n=>{if(n)n.dataset.spb="1"});
   ["quizCard","pathCard","confCard","installCard"].forEach(id=>tag($(id),"home"));
   ["friendsCard","inviteCard"].forEach(id=>tag($(id),"friends"));
-  ["libCard","gemsCard","awardsCard"].forEach(id=>tag($(id),"awards"));
+  ["gemsCard","libraryInline","readerConsole"].forEach(id=>tag($(id),"awards"));
+  ["libCard","awardsCard"].forEach(id=>tag($(id),"profile"));
   ["schedule","calendarCard"].forEach(id=>tag($(id),"plan"));
   // «Прогресс плана» — в «План», «Как это работает» — в «Ещё»
   const prog=$("progCard"),how=$("howCard"),f2=prog&&prog.closest(".fold2");
-  if(f2){f2.before(prog);f2.after(how);f2.remove()}tag(prog,"plan");tag(how,"awards"); // раздела «Ещё» больше нет — «Как это работает» и «Впервые читаете Библию?» в «Библиотеке»
+  if(f2){f2.before(prog);f2.after(how);f2.remove()}tag(prog,"plan");tag(how,"profile"); // раздела «Ещё» больше нет — «Как это работает» и «Впервые читаете Библию?» в «Библиотеке»
   
-  tag($("guideOpen"),"awards");{const ac=$("awardsCard"),go=$("guideOpen");if(ac&&go)ac.after(go)} // в «Библиотеке»: сначала книги, алмазы и награды, затем путеводитель
+  tag($("guideOpen"),"profile");
   tag(document.querySelector(".app>.foot"),"awards");
   try{libLayout()}catch(e){console.warn(e)}
   // друзья без входа — подсказка
@@ -3681,32 +3683,64 @@ function openArchive(){
 }
 /* «Библиотека»: Мои книги → Достижения → Как читать Библию — одинаковые строки с иконками */
 function libLayout(){
-  const lc=$("libCard"),gc=$("gemsCard"),ac=$("awardsCard"),go=$("guideOpen"),hw=$("howCard");if(!lc||!gc||!ac||!go||!hw||libLayout.done)return;libLayout.done=true;
-  const sec=(t,spb)=>{const h=el("div","libsec",t);h.dataset.page="awards";if(spb)h.dataset.spb="1";return h};
-  const tile=(cls,ch)=>{const t=el("span","lico "+cls);t.setAttribute("aria-hidden","true");if(typeof ch==="string")t.textContent=ch;else if(ch)t.append(ch);return t};
-  const two=(t,sub)=>{const w=el("span","ltt");w.append(el("b",null,t));if(sub){const s2=el("small",null,sub);w.append(s2)}return w};
-  const g1=el("div","lgroup");g1.dataset.page="awards";g1.dataset.spb="1";
-  const g2=el("div","lgroup");g2.dataset.page="awards";
-  // книги: полоска прогресса Библии
-  const tx=lc.querySelector(".libtx");if(tx&&!$("libBarI")){const bn=el("span","libbarn","");bn.id="libBarN";const bar=el("span","libbar"),bi=el("i");bi.id="libBarI";bar.append(bi);tx.querySelector("b").after(bn,bar)}
-  lc.before(sec("Мои книги"));
-  // прогресс по расписанию (раньше — отдельная карточка «Прогресс плана» во вкладке «Расписания») и архив
-  {const pr=$("prog");const ar=el("button","card larch");ar.type="button";ar.id="archCard";ar.dataset.page="awards";
-    const ai=el("span","lico lgem");ai.append(icoEl("scroll"));const at=el("span","ltt");at.append(el("b",null,"Архив"),el("small",null,"Прочитанные расписания и прошедшие челленджи"));
-    ar.append(ai,at,el("span","libgo","›"));ar.addEventListener("click",()=>openArchive());
-    if(pr){const pc=el("section","card lprog");pc.dataset.page="awards";pc.dataset.spb="1";pc.append(el("div","lptitle","Прогресс по расписанию"),pr);lc.after(pc);pc.after(ar)}else lc.after(ar)}
-  lc.after(sec("Достижения",1),g1);g1.append(gc,ac);
-  go.classList.add("libhide");hw.classList.add("libhide");
-  {const pc=document.querySelector(".lprog"),ar=$("archCard");if(pc)lc.after(pc);if(ar)(pc||lc).after(ar)} // прогресс и архив — сразу под «Моей библиотекой»
-
-  // алмазы
-  {const h=gc.querySelector(".foldhead h2"),gi=h&&h.querySelector(".gemicon");if(h){if(gi){gi.classList.remove("big");h.prepend(tile("lgem",gi))}const tn=[...h.childNodes].find(n=>n.nodeType===3);if(tn){tn.remove();h.append(two("Алмазы","Вопросы по главам"))}}}
-  // награды
-  {const h=ac.querySelector(".foldhead h2");if(h){h.textContent="";h.append(tile("lmedal","🏅"),two("Награды","Значки за серии и книги"))}}
-  // путеводитель
-  {const gb=go.querySelector(".gbshelf");if(gb)gb.replaceWith(tile("lguide","📖"));const t=go.querySelector(".gbt");if(t)t.textContent="Что это за книга и как читать ссылки вроде «Мф. 3:7–17»"}
-  // как это работает
-  {const h=hw.querySelector(".foldhead h2");if(h){h.textContent="";h.append(tile("lhow","💡"),two("Как работает «В Слове»","Пламя, серия дней и заморозки"))}}
+  if(libLayout.done)return;libLayout.done=true;
+  // Старая кнопка библиотеки и награды сохраняются в DOM для счётчиков
+  // и получения наград, но не отображаются на книжной вкладке.
+  const oldLib=$("libCard"),awards=$("awardsCard");
+  if(oldLib)oldLib.dataset.page="profile";
+  if(awards)awards.dataset.page="profile";
+  const guide=$("guideOpen"),how=$("howCard");
+  if(guide)guide.dataset.page="profile";
+  if(how)how.dataset.page="profile";
+  // Архив теперь открывается через имя читателя; из библиотеки удаляем.
+  const oldArchive=$("archCard");if(oldArchive)oldArchive.remove();
+  const oldProgress=document.querySelector(".lprog");if(oldProgress)oldProgress.remove();
+}
+function renderReaderConsole(){
+  const host=$("readerConsole");if(!host)return;
+  host.textContent="";
+  const header=el("div","reader-console-head");
+  header.append(el("h2",null,"Мой пульт читателя"));
+  const go=el("button","btn reader-console-go","Открыть чтение");
+  go.type="button";go.addEventListener("click",()=>setPage("home"));
+  header.append(go);host.append(header);
+  const items=el("div","reader-console-list");
+  const addRow=(schedule,label,passage,done)=>{
+    const row=el("div","reader-console-row"),body=el("div","reader-console-body");
+    body.append(el("span","reader-console-schedule",schedule),el("b",null,label));
+    if(passage&&passage.book){
+      const link=el("a","reader-console-link",refStr(passage));
+      link.href=chapterUrl(passage);link.target="_blank";link.rel="noopener";
+      body.append(link);
+    }else body.append(el("span","reader-console-hint","Расписание прочитано"));
+    row.append(body,el("span",done?"reader-console-ok":"reader-console-next",done?"✓ Сегодня":"Следующий"));
+    items.append(row);
+  };
+  if(!noPlan()){
+    KEYS.forEach(k=>{
+      const p=nextP(k),passage=p<DAYS?part(k,p):null;
+      addRow(SCHED.name,T[k].label,passage,datesOf(k).has(today()));
+    });
+  }
+  Object.keys(state.extra||{}).forEach(id=>{
+    if(!state.extra[id]||id===SCHED.id)return;
+    const S=xS(id);if(!S)return;
+    S.keys.forEach(k=>{
+      const p=xNext(id,k);
+      if(p>=S.plan.length)return;
+      const passage=part2(S,k,p);
+      if(!passage||!passage.book)return;
+      addRow(S.name,k==="nt"?"Чтение":"Ветхий Завет",passage,
+        xToday(id,k).length>0);
+    });
+  });
+  if(!items.children.length)items.append(el("p","hint","Здесь появятся текущие книги и отрывки из ваших расписаний."));
+  host.append(items);
+}
+function showInlineLibrary(){
+  if(!$("libraryInline"))return;
+  openBooks(null,null,null,true);
+  renderReaderConsole();
 }
 function applyPage(){
   pagesSetup();
@@ -3715,6 +3749,7 @@ function applyPage(){
 
   document.querySelectorAll(".app>[data-page]").forEach(n=>n.classList.toggle("pg-off",n.dataset.page!==curPage));
   document.body.dataset.page=curPage;
+  if(curPage==="awards")try{showInlineLibrary()}catch(e){console.warn("Could not render inline library",e)}
   const ph=$("pageHead");const it=list.find(x=>x[0]===curPage);ph.hidden=true;const h1=document.querySelector(".app>.top .brand h1");if(h1)h1.textContent=curPage==="home"?"В Слове":it[2];
   // друзья: если вход не выполнен — подсказка вместо пустоты
   const fe=$("friendsEmpty");if(fe){let was=false;try{was=!!localStorage.getItem("ogonek-owner")}catch(e){}const has=!$("friendsCard").hidden||was;fe.hidden=has;const login=$("loginTop"),can=login&&!login.hidden;

@@ -728,22 +728,6 @@
       ctx.restore();
       ctx.strokeStyle="rgba(142,196,255,.65)";ctx.lineWidth=1.3;
       ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.stroke();
-      // Подписи реальных островов-книг — как у глобуса читателей.
-      if(zoom >= .9){
-        const visibleBooks = books.map(b => ({b,p:rotBook(b.c)})).filter(o=>o.p[2]>.52)
-          .sort((a,b)=>b.b.cells.length-a.b.cells.length);
-        const taken=[];
-        const font = zoom>2?13:11;
-        ctx.font="650 "+font+"px system-ui,sans-serif";ctx.textAlign="center";ctx.lineJoin="round";
-        for(const o of visibleBooks){
-          const x=cx+o.p[0]*R,y=cy-o.p[1]*R;
-          const width=ctx.measureText(o.b.name).width+8;
-          const b=[x-width/2,y-4,x+width/2,y+font+4];
-          if(taken.some(q=>b[0]<q[2]&&b[2]>q[0]&&b[1]<q[3]&&b[3]>q[1]))continue;
-          taken.push(b);ctx.lineWidth=2.7;ctx.strokeStyle="rgba(4,10,27,.8)";
-          ctx.strokeText(o.b.name,x,y);ctx.fillStyle="#f3f6ff";ctx.fillText(o.b.name,x,y);
-        }
-      }
       // Маршрут поверх карты; дальняя сторона скрыта земным шаром.
       hit.length=0;
       trails.forEach((trail, testament) => {
@@ -768,33 +752,49 @@
         ctx.stroke();
         ctx.restore();
       });
+      const occupied = [[W - 48, 5, W, 138]];
       const markers = [...entries].sort((a, b) => Number(b.kind === "bible") - Number(a.kind === "bible"));
       markers.forEach(e=>{
         const p=rotBook(e.v);
         if(p[2]<.03)return;
-        const x=cx+p[0]*R,y=cy-p[1]*R,latest=e===last;
-        const color=e.kind==="bible"?"#ffb84a":"#ae86ff";
-        const radius = e.kind === "bible" ? (latest ? 8.2 : 6.2) : 3.5;
-        ctx.save();ctx.shadowColor=color;ctx.shadowBlur=e.kind === "bible" ? (latest ? 26 : 14) : 5;
-        ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,radius,0,TAU);ctx.fill();
-        ctx.shadowBlur=0;ctx.strokeStyle="#fff1cc";ctx.lineWidth=e.kind === "bible" ? 2.2 : 1;
-        ctx.beginPath();ctx.arc(x,y,radius,0,TAU);ctx.stroke();
-        ctx.restore();
+        const x=cx+p[0]*R,y=cy-p[1]*R;
+        if(e.kind==="bible"){
+          const scale=e === last ? .65 : .52;
+          window.OgonekProgressVisual.flame(ctx,x,y,scale,1);
+          occupied.push([x-5,y-12,x+5,y+4]);
+        }else{
+          ctx.fillStyle="#cfb4ff";ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fill();
+          occupied.push([x-4,y-4,x+4,y+4]);
+        }
         hit.push({x,y,e});
       });
-      // Метка последней прочитанной книги и её дата.
-      if(hit.length){
-        const lastVisible=hit.reduce((a,b)=>b.e.date>=a.e.date?b:a),item=lastVisible.e,txt=item.label||item.name;
-        const label=txt.length>16?txt.slice(0,15)+"…":txt;
-        ctx.font="700 13px system-ui,sans-serif";ctx.textAlign="center";
-        const w=Math.min(W*.65,Math.max(96,ctx.measureText(label).width+24)),x=clamp(lastVisible.x,7+w/2,W-7-w/2);
-        const y=clamp(lastVisible.y-58,8,H-55);
-        ctx.fillStyle="rgba(16,23,50,.94)";ctx.strokeStyle=item.kind==="bible"?"#ffbf61":"#ad8dff";ctx.lineWidth=1.6;
-        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x-w/2,y,w,42,9);ctx.fill();ctx.stroke();}
-        else{ctx.fillRect(x-w/2,y,w,42);ctx.strokeRect(x-w/2,y,w,42);}
-        ctx.fillStyle="#fff";ctx.fillText(label,x,y+17);
-        ctx.font="500 11px system-ui,sans-serif";ctx.fillStyle="#cbd3ed";
-        ctx.fillText(item.date?new Date(item.date+"T12:00:00").toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"}):"Дата не указана",x,y+32);
+
+      // Подписи подбирают свободное место вокруг отметок.
+      if(zoom >= .9){
+        const visibleBooks = books.map(b => ({b,p:rotBook(b.c)})).filter(o=>o.p[2]>.52)
+          .sort((a,b)=>b.b.cells.length-a.b.cells.length);
+        const font=zoom>2?13:11;
+        ctx.font="650 "+font+"px system-ui,sans-serif";
+        ctx.textAlign="center";ctx.textBaseline="alphabetic";
+        ctx.lineJoin="round";ctx.lineWidth=2.7;
+        ctx.strokeStyle="rgba(4,10,27,.8)";ctx.fillStyle="#f3f6ff";
+        for(const {b,p} of visibleBooks){
+          const x=cx+p[0]*R,y=cy-p[1]*R;
+          const width=ctx.measureText(b.name).width+6,half=width/2;
+          if(x<0||x>W||y<0||y>H||width>W-8)continue;
+          const centered=clamp(x,half+4,W-half-4);
+          const positions=[[centered,y],[centered,y+font+8],[centered,y-15],
+            [x+half+8,y],[x-half-8,y]];
+          for(const [tx,ty] of positions){
+            const box=[tx-half,ty-font-2,tx+half,ty+4];
+            const [left,top,right,bottom]=box;
+            if(left<2||top<2||right>W-2||bottom>H-2||
+              occupied.some(q=>left<q[2]&&right>q[0]&&top<q[3]&&bottom>q[1]))continue;
+            occupied.push(box);
+            ctx.strokeText(b.name,tx,ty);ctx.fillText(b.name,tx,ty);
+            break;
+          }
+        }
       }
     };
     const resize=()=>{

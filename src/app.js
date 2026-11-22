@@ -1515,11 +1515,44 @@ function openBooks(list,who){
       const top=el("div","msbtop");top.append(tx,pc);li.append(top,br);return li};
     if(ms.length){sheet.append(el("div","plab","Книги служения — читаю и прочитано"));const l=el("div","msbl");lsAll.concat(oth).forEach(o=>l.append(item(o)));sheet.append(l)}
     else sheet.append(el("p","hint","Жизнеизучение и другие книги добавляются в «Расписаниях» → «＋ Добавить» → «Книга служения»."))}
-  if(nB){const ul=el("ol","bslist");
-    list.slice().sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:0).forEach(([a,d,c])=>{const b=BOOK[a];if(!b)return;const li=el("li");const dot=el("i");dot.style.background=SECCOL[b.s];
-      const tx=el("div");tx.append(el("b",null,b.n),el("span",null,"прочитана "+fmtLong(d)+(c>1?" · "+c+" "+plural(c,"раз","раза","раз"):"")));li.append(dot,tx);ul.append(li)});
-    sheet.append(el("div","plab","Библия — по порядку прочтения"),ul)}
-  else sheet.append(el("p","hint",mine?"Ни одна книга Библии пока не прочитана целиком.":"Пока ни одной книги Библии целиком."));
+  // Две компактные колонки — только список прочитанных книг.
+  // Книжную полку выше, источники дат и порядок прочтения не изменяем.
+  if(nB){
+    const months=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+    const shortDate=d=>{const v=parse(d);return Number.isFinite(v.getTime())?v.getDate()+" "+months[v.getMonth()]+" "+v.getFullYear():String(d||"")};
+    const latest=list.slice().sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:0);
+    const grid=el("div","bsread-grid");
+    [["ot","Ветхий Завет",39],["nt","Новый Завет",27]].forEach(([testament,title,total])=>{
+      const items=latest.filter(([a])=>BOOK[a]&&BOOK[a].t===testament);
+      const col=el("section","bsread-col");
+      col.setAttribute("aria-label",title+": "+items.length+" из "+total);
+      const heading=el("div","bsread-head");
+      heading.append(el("h3",null,title),el("span",null,items.length+" / "+total));
+      const rows=el("div","bsread-list");
+      const LIMIT=4;
+      items.forEach(([a,d,c],i)=>{
+        const b=BOOK[a],item=el("div","bsread-item");
+        item.hidden=i>=LIMIT;
+        item.title=b.n+" — прочитана "+fmtLong(d)+(c>1?" · "+c+" "+plural(c,"раз","раза","раз"):"");
+        const mark=el("i","bsread-mark");mark.style.backgroundColor=SECCOL[b.s];
+        const content=el("div","bsread-detail"),name=el("b","bsread-name",b.n),when=el("span","bsread-when",shortDate(d));
+        content.append(name,when);item.append(mark,content);rows.append(item);
+      });
+      col.append(heading,rows);
+      if(items.length>LIMIT){
+        const expand=el("button","bsread-toggle","Показать все ("+items.length+")");expand.type="button";
+        let expanded=false;expand.setAttribute("aria-expanded","false");
+        expand.addEventListener("click",()=>{
+          expanded=!expanded;[...rows.children].forEach((item,i)=>{item.hidden=!expanded&&i>=LIMIT});
+          expand.textContent=expanded?"Свернуть":"Показать все ("+items.length+")";
+          expand.setAttribute("aria-expanded",String(expanded));
+        });
+        col.append(expand);
+      }
+      grid.append(col);
+    });
+    sheet.append(el("div","plab","Книги по порядку чтения"),grid);
+  }else sheet.append(el("p","hint",mine?"Ни одна книга Библии пока не прочитана целиком.":"Пока ни одной книги Библии целиком."));
   if(mine){const nb=nextBookHint();if(nb)sheet.append(el("p","bsnext","Ближе всего: «"+(FULL[nb.b]||nb.b)+"» — осталось "+nb.left+" "+plural(nb.left,"день","дня","дней")+" чтения"))}
   modal.append(sheet);document.body.append(modal);
 }

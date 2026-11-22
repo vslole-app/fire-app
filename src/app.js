@@ -1418,7 +1418,7 @@ $("planOpen").addEventListener("click",openPlans);
 $("booksOpen").addEventListener("click",()=>setPage("awards"));
 $("libCard").addEventListener("click",()=>setPage("awards"));
 /* ссылка с #library сразу открывает библиотеку */
-if(location.hash==="#library")setTimeout(()=>{try{setPage("awards")}catch(e){}},400);
+if(location.hash==="#library")setTimeout(()=>{if(curPage!=="awards")setPage("awards")},400);
 /* ---------- книжная полка: прочитанные книги и когда они дочитаны ---------- */
 // книга прочитана, когда отмечены все её дни подряд в расписании; дата — день, когда отмечен последний из них
 function booksFinished(){
@@ -1481,7 +1481,7 @@ function bibleReadingHistory(validDate){
   }
   return [...events.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
-function openBooks(list,who,ministryBooks,embedded=false,openGlobeNow=false){
+function openBooks(list,who,ministryBooks,embedded=false,openGlobeNow=!embedded){
   const mine=!list; list=list||booksSummary();
   if(mine&&!state.libSeen){state.libSeen=true;save();try{applyPtr()}catch(e){}}
   // Shared profiles use Firestore-safe objects; tolerate legacy tuples.
@@ -3504,7 +3504,7 @@ function pathCenterMe(smooth){const pb=$("pathBox");if(!pb||!pb.offsetParent)ret
 function pathFocusSoon(){const pb=$("pathBox");if(pb){delete pb.dataset.touched;delete pb.dataset.ctouched}
   requestAnimationFrame(()=>requestAnimationFrame(()=>pathCenterMe(false)));setTimeout(()=>pathCenterMe(false),250)}
 function setPage(p){if(p==="plan")schedView="";
-  curPage=p;try{sessionStorage.setItem("ogonek-page",p)}catch(e){}applyPage();window.scrollTo({top:0});if(p==="home")pathFocusSoon();
+  curPage=p;try{sessionStorage.setItem("ogonek-page",p)}catch(e){}applyPage(p==="awards");window.scrollTo({top:0});if(p==="home")pathFocusSoon();
 }
 
 /* ---------- настройки уведомлений: напоминания (если огонёк ещё не горит) и уведомления от друзей ----------
@@ -3631,7 +3631,7 @@ function showInlineLibrary(openGlobeNow){
   if(!$("libraryInline")||document.querySelector(".reading-globe-window[open]"))return;
   openBooks(null,null,null,true,openGlobeNow);
 }
-function applyPage(){
+function applyPage(openLibraryGlobe=false){
   pagesSetup();
   const list=PAGES_SPB;
   if(!list.some(x=>x[0]===curPage)||curPage==="quiz"||curPage==="games")curPage="home";
@@ -3639,7 +3639,7 @@ function applyPage(){
   document.querySelectorAll(".app>[data-page]").forEach(n=>n.classList.toggle("pg-off",n.dataset.page!==curPage));
   const enteringLibrary=curPage==="awards"&&document.body.dataset.page!=="awards";
   document.body.dataset.page=curPage;
-  if(curPage==="awards")try{showInlineLibrary(enteringLibrary)}catch(e){console.warn("Could not render inline library",e)}
+  if(curPage==="awards")try{showInlineLibrary(openLibraryGlobe||enteringLibrary)}catch(e){console.warn("Could not render inline library",e)}
   const ph=$("pageHead");const it=list.find(x=>x[0]===curPage);ph.hidden=true;const h1=document.querySelector(".app>.top .brand h1");if(h1)h1.textContent=curPage==="home"?"В Слове":it[2];
   // друзья: если вход не выполнен — подсказка вместо пустоты
   const fe=$("friendsEmpty");if(fe){let was=false;try{was=!!localStorage.getItem("ogonek-owner")}catch(e){}const has=!$("friendsCard").hidden||was;fe.hidden=has;const login=$("loginTop"),can=login&&!login.hidden;
@@ -3949,7 +3949,7 @@ function bookCelebrate(o,after){
   // счётчики
   setTimeout(()=>st.querySelectorAll("b").forEach(b=>{const v=+b.dataset.v,s=performance.now();(function f(n){const k=Math.min(1,(n-s)/900),e=1-Math.pow(1-k,3);b.textContent=Math.round(v*e)+(b.dataset.s||"");if(k<1)requestAnimationFrame(f)})(s)}),2300);
   const close=then=>{alive=false;ov.classList.add("out");setTimeout(()=>{ov.remove();if(then)then();if(after)after()},350)};
-  go.addEventListener("click",()=>close(()=>{try{setPage("awards")}catch(e){}openBooks()}));
+  go.addEventListener("click",()=>close(()=>setPage("awards")));
   nx.addEventListener("click",()=>close());
   addEventListener("resize",fit,{once:true});
 }

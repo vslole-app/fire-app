@@ -771,8 +771,9 @@
 
       // Подписи подбирают свободное место вокруг отметок.
       if(zoom >= .9){
+        const markedBooks = new Set(entries.filter(e=>e.kind==="bible").map(e=>e.v));
         const visibleBooks = books.map(b => ({b,p:rotBook(b.c)})).filter(o=>o.p[2]>.52)
-          .sort((a,b)=>b.b.cells.length-a.b.cells.length);
+          .sort((a,b)=>Number(markedBooks.has(b.b.c))-Number(markedBooks.has(a.b.c))||b.b.cells.length-a.b.cells.length);
         const font=zoom>2?13:11;
         ctx.font="650 "+font+"px system-ui,sans-serif";
         ctx.textAlign="center";ctx.textBaseline="alphabetic";
@@ -783,7 +784,7 @@
           const width=ctx.measureText(b.name).width+6,half=width/2;
           if(x<0||x>W||y<0||y>H||width>W-8)continue;
           const centered=clamp(x,half+4,W-half-4);
-          const positions=[[centered,y],[centered,y+font+8],[centered,y-15],
+          const positions=[[centered,y],[centered,y+font+8],[centered,y-18],
             [x+half+8,y],[x-half-8,y]];
           for(const [tx,ty] of positions){
             const box=[tx-half,ty-font-2,tx+half,ty+4];

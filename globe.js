@@ -851,8 +851,13 @@
     };
     const resize=()=>{
       if(!alive||!host.isConnected)return;
-      sizeW=Math.max(240,stage.clientWidth||host.clientWidth||360);
-      sizeH=Math.max(300,Math.min(475,sizeW*1.07));
+      const fullScreen=!!host.closest(".reading-globe-window");
+      sizeW=stage.clientWidth;
+      sizeH=fullScreen?stage.clientHeight:Math.max(300,Math.min(475,sizeW*1.07));
+      if(!sizeW||!sizeH)return;
+      const width=Math.round(sizeW*Math.min(2,window.devicePixelRatio||1));
+      const height=Math.round(sizeH*Math.min(2,window.devicePixelRatio||1));
+      if(canvas.width===width&&canvas.height===height&&canvas.style.width===sizeW+"px"&&canvas.style.height===sizeH+"px")return;
       dpr=Math.min(2,window.devicePixelRatio||1);
       canvas.width=Math.round(sizeW*dpr);canvas.height=Math.round(sizeH*dpr);
       canvas.style.width=sizeW+"px";canvas.style.height=sizeH+"px";
@@ -925,13 +930,6 @@
       else if(ev.key==="ArrowUp"){pitch=clamp(pitch-.15,-1.4,1.4);draw();ev.preventDefault()}
       else if(ev.key==="ArrowDown"){pitch=clamp(pitch+.15,-1.4,1.4);draw();ev.preventDefault()}
     });
-    if (hasDetail) {
-      Object.assign(detail.style, {
-        position:"absolute", left:"10px", right:"10px", bottom:"10px",
-        maxHeight:"32%", overflowY:"auto", background:"rgba(16,23,50,.96)"
-      });
-      stage.append(detail);
-    }
     host.append(stage);
     const observer=window.ResizeObserver?new ResizeObserver(resize):null;
     if(observer)observer.observe(stage);else window.addEventListener("resize",resize);

@@ -1563,19 +1563,52 @@ function openBooks(list,who,ministryBooks,embedded=false){
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
   const explain=el("p","reading-globe-hint",
     "Нажмите на участок прочитанной книги или отметку, чтобы увидеть дату.");
-  sheet.append(heading,globeHost,bookDetail,explain);
+  const globePanel=el("div","reading-globe-panel");
+  globePanel.append(globeHost,bookDetail);
+  const expandGlobe=el("button","btn","Открыть глобус на весь экран");
+  expandGlobe.type="button";
+  expandGlobe.setAttribute("aria-haspopup","dialog");
+  const globeWindow=el("dialog","reading-globe-window");
+  globeWindow.setAttribute("aria-label","Мой путь чтения");
+  const windowHead=el("div","reading-globe-window-head");
+  const closeGlobe=el("button","btn","Закрыть");
+  closeGlobe.type="button";
+  windowHead.append(el("h3",null,"Мой путь чтения"),closeGlobe);
+  globeWindow.append(windowHead);
+  const restoreGlobe=()=>{
+    expandGlobe.after(globePanel);
+    globeWindow.remove();
+  };
+  expandGlobe.addEventListener("click",()=>{
+    document.body.append(globeWindow);
+    globeWindow.append(globePanel);
+    globeWindow.showModal();
+  });
+  closeGlobe.addEventListener("click",()=>globeWindow.close());
+  globeWindow.addEventListener("keydown",ev=>{if(ev.key==="Escape")ev.stopPropagation()});
+  globeWindow.addEventListener("close",()=>{
+    if(globeWindow.open||!globeWindow.isConnected)return;
+    restoreGlobe();
+    if(expandGlobe.isConnected)expandGlobe.focus({preventScroll:true});
+  });
+  sheet.append(heading,expandGlobe,globePanel,explain);
   let globeCleanup=null;
   const mount=()=>{
     if(!globeHost.isConnected||globeCleanup)return;
     const G=window.OgonekGlobe;
     if(!G||typeof G.mountReading!=="function"){setTimeout(mount,180);return}
     globeHost.textContent="";
-    globeCleanup=G.mountReading(globeHost,history,route,items=>{
+    const destroyMap=G.mountReading(globeHost,history,route,items=>{
       bookDetail.hidden=false;
       bookDetail.replaceChildren(...items.flatMap(item=>[
         el("b",null,item.name),el("span",null,"Прочитана "+fmtLong(item.date))
       ]));
     });
+    globeCleanup=()=>{
+      if(globeWindow.open)globeWindow.close();
+      if(globeWindow.isConnected)restoreGlobe();
+      destroyMap();
+    };
     if(embedded)window.__readingGlobeDestroy=globeCleanup;
   };
   if(embedded){

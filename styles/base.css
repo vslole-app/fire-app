@@ -1237,8 +1237,8 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .reading-globe-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
 .reading-globe-heading h3{margin:0;font-family:var(--display);font-size:1.22rem;line-height:1.3}
 .reading-globe-heading span{font-size:.76rem;white-space:nowrap;color:var(--muted)}
-.reading-globe-host{width:100%;min-width:0;min-height:310px;overflow:hidden}
-.reading-globe-stage{position:relative;width:100%;min-height:300px;overflow:hidden}
+.reading-globe-host{width:100%;min-width:0;overflow:hidden}
+.reading-globe-stage{position:relative;width:100%;overflow:hidden}
 .reading-globe-stage canvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .reading-globe-stage canvas:active{cursor:grabbing}
 .reading-globe-controls{position:absolute;right:8px;top:10px;display:flex;flex-direction:column;gap:7px;pointer-events:auto}
@@ -1249,14 +1249,13 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .reading-book-detail b{font-size:1rem}
 .reading-book-detail span{font-size:.85rem;color:#c6d5f6}
 .reading-globe-panel{position:relative;min-width:0}
-.reading-globe-panel>.reading-book-detail{position:absolute;top:10px;left:10px;right:54px;max-height:40%;overflow:auto;z-index:1}
 .reading-globe-window{position:fixed;inset:0;box-sizing:border-box;width:100%;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;border:0;background:#05071a;color:#eef0fa;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(10px + env(safe-area-inset-bottom,0px))}
 .reading-globe-window[open]{display:flex;flex-direction:column;gap:8px}
 .reading-globe-window-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .reading-globe-window-head h3{margin:0;font-family:var(--display);font-size:1.22rem}
 .reading-globe-window .reading-globe-panel{flex:1;min-height:0;display:flex;flex-direction:column}
 .reading-globe-window .reading-globe-host{flex:1;min-height:0}
-.reading-globe-window .reading-globe-stage{height:100%;min-height:0}
+.reading-globe-window .reading-globe-stage{height:100%;background:radial-gradient(circle at 12% 18%,rgba(120,70,210,.20),transparent 55%),radial-gradient(circle at 92% 88%,rgba(255,110,60,.10),transparent 60%)}
 .reading-globe-window .reading-book-detail{position:static;max-height:30%;flex:none;margin-top:8px}
 .reading-globe-hint{margin:-5px 0 3px;font-size:.77rem;line-height:1.4;color:var(--muted);text-align:center}
 .awards-sheet .badges{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:12px}

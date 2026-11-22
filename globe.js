@@ -193,6 +193,15 @@
   const hasVerse = (p) => !!(p && p.note && p.nd && p.nd === today()); // стих виден только сегодня
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   const stars = Array.from({ length: 170 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, p: Math.random() * 6 }));
+  function drawStars(ctx, width, height, yaw, pitch, time) {
+    for (const star of stars) {
+      const x = ((star.x * width + yaw * 25) % width + width) % width;
+      const y = ((star.y * height + pitch * 25) % height + height) % height;
+      const alpha = .35 + .4 * Math.sin(time * 1.5 + star.p) ** 2;
+      ctx.fillStyle = "rgba(255,255,255," + alpha + ")";
+      ctx.fillRect(x, y, star.r, star.r);
+    }
+  }
 
   function rot(v) { const x1 = v[0] * cyw + v[2] * syw, z1 = -v[0] * syw + v[2] * cyw; return [x1, v[1] * cp - z1 * sp, v[1] * sp + z1 * cp]; }
   // ровный перелёт: поворот и приближение/отдаление идут вместе по одной плавной кривой
@@ -259,7 +268,7 @@
     cyw = Math.cos(yaw); syw = Math.sin(yaw); cp = Math.cos(pitch); sp = Math.sin(pitch);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = "#05071a"; ctx.fillRect(0, 0, W, H);
     [[0.12, 0.18, 0.55, "rgba(120,70,210,.20)"], [0.92, 0.88, 0.6, "rgba(255,110,60,.10)"]].forEach((n) => { const g = ctx.createRadialGradient(W * n[0], H * n[1], 0, W * n[0], H * n[1], W * n[2]); g.addColorStop(0, n[3]); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); });
-    stars.forEach((s) => { const x = ((s.x * W + yaw * 25) % W + W) % W, y = ((s.y * H + pitch * 25) % H + H) % H; ctx.fillStyle = "rgba(255,255,255," + (0.35 + 0.4 * Math.sin(t * 1.5 + s.p) ** 2) + ")"; ctx.fillRect(x, y, s.r, s.r); });
+    drawStars(ctx, W, H, yaw, pitch, t);
     // размер окна меняется (карточка внизу появилась/скрылась) — глобус подстраивается плавно, без рывка
     // высоту карточки меряем не каждый кадр (это заставляло браузер пересчитывать вёрстку 60 раз в секунду), а раз в 200 мс
     if (!frame.oT || ts - frame.oT > 200) { frame.oT = ts; const cdv = root && root.querySelector(".gcard"); frame.occ = cdv && !cdv.hidden ? Math.min(H * 0.5, cdv.offsetHeight + 6) : 0; }
@@ -663,7 +672,11 @@
     const flameLayer = document.createElement("canvas");
     flameLayer.setAttribute("aria-hidden", "true");
     Object.assign(flameLayer.style, {position:"absolute", inset:"0", pointerEvents:"none"});
-    stage.append(canvas, flameLayer);
+    const starLayer = document.createElement("canvas");
+    starLayer.setAttribute("aria-hidden", "true");
+    Object.assign(starLayer.style, {position:"absolute", inset:"0", pointerEvents:"none"});
+    canvas.style.position = "relative";
+    stage.append(starLayer, canvas, flameLayer);
     const controls = el("div", "reading-globe-controls");
     const control = (t, label, fn) => {
       const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-label", label);
@@ -696,10 +709,15 @@
     };
     const canvasContext = canvas.getContext("2d");
     const flameContext = flameLayer.getContext("2d");
-    if (!canvasContext || !flameContext) return () => {};
+    const starContext = starLayer.getContext("2d");
+    if (!canvasContext || !flameContext || !starContext) return () => {};
     const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     let flameFrame = 0, inView = !window.IntersectionObserver;
-    const paintFlames = timestamp => {
+    const paintAnimation = timestamp => {
+      const time = motion?.matches ? 0 : timestamp / 1000;
+      starContext.setTransform(dpr,0,0,dpr,0,0);
+      starContext.clearRect(0,0,sizeW,sizeH);
+      drawStars(starContext,sizeW,sizeH,yaw,pitch,time);
       flameContext.setTransform(dpr,0,0,dpr,0,0);
       flameContext.clearRect(0,0,sizeW,sizeH);
       for (const marker of hit) {
@@ -708,22 +726,22 @@
           window.OgonekProgressVisual.flame(flameContext, marker.x, marker.y, marker.scale, 1);
         } else {
           drawReaderFlame(flameContext, marker.x, marker.y, marker.scale,
-            motion?.matches ? 0 : timestamp / 1000, marker.phase);
+            time, marker.phase);
         }
       }
     };
     const animate = timestamp => {
       flameFrame = 0;
       if (!alive || !host.isConnected || !inView || motion?.matches) return;
-      paintFlames(timestamp);
+      paintAnimation(timestamp);
       flameFrame = requestAnimationFrame(animate);
     };
     const updateAnimation = () => {
       if (!inView || motion?.matches) {
         cancelAnimationFrame(flameFrame);
         flameFrame = 0;
-        if (inView && alive) paintFlames(performance.now());
-      } else if (!flameFrame && hit.some(marker => marker.scale)) {
+        if (inView && alive) paintAnimation(performance.now());
+      } else if (!flameFrame) {
         flameFrame = requestAnimationFrame(animate);
       }
     };
@@ -846,14 +864,13 @@
           }
         }
       }
-      paintFlames(performance.now());
+      paintAnimation(performance.now());
       updateAnimation();
     };
     const resize=()=>{
       if(!alive||!host.isConnected)return;
-      const fullScreen=!!host.closest(".reading-globe-window");
       sizeW=stage.clientWidth;
-      sizeH=fullScreen?stage.clientHeight:Math.max(300,Math.min(475,sizeW*1.07));
+      sizeH=stage.clientHeight;
       if(!sizeW||!sizeH)return;
       const width=Math.round(sizeW*Math.min(2,window.devicePixelRatio||1));
       const height=Math.round(sizeH*Math.min(2,window.devicePixelRatio||1));
@@ -861,8 +878,10 @@
       dpr=Math.min(2,window.devicePixelRatio||1);
       canvas.width=Math.round(sizeW*dpr);canvas.height=Math.round(sizeH*dpr);
       canvas.style.width=sizeW+"px";canvas.style.height=sizeH+"px";
-      flameLayer.width=canvas.width;flameLayer.height=canvas.height;
-      flameLayer.style.width=canvas.style.width;flameLayer.style.height=canvas.style.height;
+      for (const layer of [flameLayer,starLayer]) {
+        layer.width=canvas.width;layer.height=canvas.height;
+        layer.style.width=canvas.style.width;layer.style.height=canvas.style.height;
+      }
       draw();
     };
     const zoomTo=v=>{zoom=clamp(v,.8,maxZoom);draw()};

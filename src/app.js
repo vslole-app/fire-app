@@ -1514,39 +1514,13 @@ function openBooks(list,who,ministryBooks){
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
-  // Визуальный маршрут чтения. Данные, даты и темп — из реально
-  // завершённых книг; путь на рисунке условный, не календарная шкала.
+  // Под книжной полкой оставляем только маршрут прочитанных книг.
+  // Даты и подписи точек берём из настоящего прогресса читателя.
   const dated=list
     .filter(([a,d])=>BOOK[a]&&typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today())
     .sort((a,b)=>a[1]<b[1]?-1:a[1]>b[1]?1:0);
-  const totalBooks=66,doneBooks=Math.min(totalBooks,read.size),leftBooks=totalBooks-doneBooks;
-  const first=dated[0],days=first?Math.max(1,dayNo(today())-dayNo(first[1])+1):0;
-  const canForecast=doneBooks>=3&&dated.length>=3&&days>=14&&leftBooks>0;
-  const perMonth=canForecast?(dated.length/days)*30.44:0;
-  const daysRemaining=canForecast?Math.ceil(leftBooks*days/dated.length):0;
-  // Далёкий/нестабильный прогноз лучше не показывать как точную дату.
-  const finish=doneBooks===totalBooks?"Завершено":canForecast&&daysRemaining<=3650
-    ?"~ "+parse(add(today(),daysRemaining)).toLocaleDateString("ru-RU",{month:"short",year:"numeric"})
-    :"Пока нет прогноза";
-  const duration=canForecast&&daysRemaining<=3650?(daysRemaining<60
-    ?Math.ceil(daysRemaining/7)+" "+plural(Math.ceil(daysRemaining/7),"неделя","недели","недель")
-    :Math.ceil(daysRemaining/30.44)+" "+plural(Math.ceil(daysRemaining/30.44),"месяц","месяца","месяцев"))
-    :doneBooks===totalBooks?"0": "—";
-  const pace=doneBooks===totalBooks?"Завершено":canForecast?(perMonth>=10?Math.round(perMonth):perMonth.toFixed(1).replace(".",","))+" книг/мес":"Пока нет данных";
+  const first=dated[0],doneBooks=Math.min(66,read.size);
   const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
-  const heading=el("h3","libroute-title","Маршрут чтения");
-  sheet.append(heading);
-  const stats=el("div","libroute-stats");
-  [[ "📖","Пройдено",doneBooks+" "+plural(doneBooks,"книга","книги","книг")],
-    ["⌛","Осталось",String(leftBooks)],
-    ["⚑","Финиш",finish]].forEach(([symbol,label,value])=>{
-      const card=el("div","libroute-stat");
-      card.append(el("span","libroute-icon",symbol));
-      const body=el("div","libroute-statbody");
-      body.append(el("span","libroute-label",label),el("b",null,value));
-      card.append(body);stats.append(card);
-    });
-  sheet.append(stats);
   const scene=el("div","libroute-scene");
   const NS="http://www.w3.org/2000/svg";
   const svg=document.createElementNS(NS,"svg");
@@ -1590,21 +1564,8 @@ function openBooks(list,who,ministryBooks){
   svg.append(sv("rect",{x:468,y:103,width:82,height:36,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
   svg.append(sv("text",{x:509,y:118,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Вся"));
   svg.append(sv("text",{x:509,y:133,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Библия"));
-  scene.append(svg,el("p","libroute-note",!dated.length?"Начните чтение — здесь появятся отметки прочитанных книг.":"Путь условный · точки — завершённые книги"+(canForecast?" · прогноз по текущему темпу":"")));
+  scene.append(svg);
   sheet.append(scene);
-  const steps=el("div","libroute-steps");
-  steps.append(el("h4",null,"Ближайшие шаги"));
-  const stepRows=el("div","libroute-steprows");
-  [["📖","Сейчас",doneBooks+" / 66"],
-    ["◷","Средний темп",pace],
-    ["▦","До финиша",duration]].forEach(([symbol,label,value])=>{
-      const row=el("div","libroute-steprow");
-      row.append(el("span","libroute-stepico",symbol),el("span","libroute-stepname",label),el("b",null,value));
-      stepRows.append(row);
-    });
-  steps.append(stepRows);
-  if(canForecast)steps.append(el("p","libroute-disclaimer","Прогноз приблизительный: книги различаются по объёму, а темп чтения может измениться."));
-  sheet.append(steps);
   modal.append(sheet);document.body.append(modal);
 }
 /* ---------- пройденные расписания и управление своими расписаниями ---------- */

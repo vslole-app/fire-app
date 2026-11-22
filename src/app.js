@@ -1514,62 +1514,96 @@ function openBooks(list,who,ministryBooks){
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
-  // Четыре компактные ячейки по два столбца: Библия, Жизнеизучения, книги служения.
-  // Вся большая книжная полка и её функции остаются выше без изменений.
-  const months=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
-  const shortDate=d=>{if(!d)return "";const v=parse(d);return Number.isFinite(v.getTime())?v.getDate()+" "+months[v.getMonth()]+" "+v.getFullYear():String(d)};
-  const grid=el("div","bsread-grid");
-  const LIMIT=4;
-  function readingColumn(title,count,of,items,kind){
-    const col=el("section","bsread-col bsread-"+kind);
-    col.setAttribute("aria-label",title+": "+(of?count+" из "+of:count+" книг"));
-    const hd=el("div","bsread-head"),h=el("h3",null,title);
-    hd.append(h,el("span",null,of?count+" / "+of:count+" книг"));
-    const rows=el("div","bsread-list");
-    items.forEach((record,i)=>{
-      const item=el("div","bsread-item");item.hidden=i>=LIMIT;
-      const mark=el("i","bsread-mark"),detail=el("div","bsread-detail");
-      mark.style.backgroundColor=record.color;
-      const name=el("b","bsread-name",record.name),when=el("span","bsread-when",record.date);
-      item.title=record.tooltip||record.name;
-      detail.append(name,when);item.append(mark,detail);rows.append(item);
+  // Визуальный маршрут чтения. Данные, даты и темп — из реально
+  // завершённых книг; путь на рисунке условный, не календарная шкала.
+  const dated=list
+    .filter(([a,d])=>BOOK[a]&&typeof d==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(d)&&d<=today())
+    .sort((a,b)=>a[1]<b[1]?-1:a[1]>b[1]?1:0);
+  const totalBooks=66,doneBooks=Math.min(totalBooks,read.size),leftBooks=totalBooks-doneBooks;
+  const first=dated[0],last=dated[dated.length-1],days=first?Math.max(1,dayNo(today())-dayNo(first[1])+1):0;
+  const canForecast=doneBooks>=3&&dated.length>=3&&days>=14&&leftBooks>0;
+  const perMonth=canForecast?(dated.length/days)*30.44:0;
+  const daysRemaining=canForecast?Math.ceil(leftBooks*days/dated.length):0;
+  // Далёкий/нестабильный прогноз лучше не показывать как точную дату.
+  const finish=doneBooks===totalBooks?"Завершено":canForecast&&daysRemaining<=3650
+    ?parse(add(today(),daysRemaining)).toLocaleDateString("ru-RU",{month:"short",year:"numeric"})
+    :"Пока нет прогноза";
+  const duration=canForecast&&daysRemaining<=3650?(daysRemaining<60
+    ?Math.ceil(daysRemaining/7)+" "+plural(Math.ceil(daysRemaining/7),"неделя","недели","недель")
+    :Math.ceil(daysRemaining/30.44)+" "+plural(Math.ceil(daysRemaining/30.44),"месяц","месяца","месяцев"))
+    :doneBooks===totalBooks?"0": "—";
+  const pace=canForecast?(perMonth>=10?Math.round(perMonth):perMonth.toFixed(1).replace(".",","))+" книг/мес":"Пока нет данных";
+  const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
+  const heading=el("h3","libroute-title","Маршрут чтения");
+  sheet.append(heading);
+  const stats=el("div","libroute-stats");
+  [[ "📖","Пройдено",doneBooks+" книг"],
+    ["⌛","Осталось",String(leftBooks)],
+    ["⚑","Финиш",finish]].forEach(([symbol,label,value])=>{
+      const card=el("div","libroute-stat");
+      card.append(el("span","libroute-icon",symbol));
+      const body=el("div","libroute-statbody");
+      body.append(el("span","libroute-label",label),el("b",null,value));
+      card.append(body);stats.append(card);
     });
-    if(!items.length)rows.append(el("p","bsread-empty",!ministryKnown&&(kind==="ls"||kind==="other")?"Данные ещё не обновлены":"Пока нет книг"));
-    col.append(hd,rows);
-    if(items.length>LIMIT){
-      const expand=el("button","bsread-toggle","Показать все ("+items.length+")");expand.type="button";
-      let expanded=false;expand.setAttribute("aria-expanded","false");
-      expand.addEventListener("click",()=>{
-        expanded=!expanded;[...rows.children].forEach((item,i)=>{item.hidden=!expanded&&i>=LIMIT});
-        expand.textContent=expanded?"Свернуть":"Показать все ("+items.length+")";
-        expand.setAttribute("aria-expanded",String(expanded));
-      });
-      col.append(expand);
-    }
-    grid.append(col);
-  }
-  const latest=list.slice().sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:0);
-  [["ot","Ветхий Завет",39],["nt","Новый Завет",27]].forEach(([testament,title,total])=>{
-    const books=latest.filter(([a])=>BOOK[a]&&BOOK[a].t===testament);
-    const items=books.map(([a,d,c])=>{const b=BOOK[a];return {
-      name:b.n,date:shortDate(d),color:SECCOL[b.s],
-      tooltip:b.n+" — прочитана "+fmtLong(d)+(c>1?" · "+c+" "+plural(c,"раз","раза","раз"):"")
-    }});
-    readingColumn(title,items.length,total,items,testament);
+  sheet.append(stats);
+  const scene=el("div","libroute-scene");
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("viewBox","0 0 560 225");svg.setAttribute("role","img");
+  svg.setAttribute("aria-label","Условный маршрут: отмечены последние прочитанные книги и финиш");
+  svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+  const sv=(tag,attrs={},txt)=>{const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));if(txt!=null)node.textContent=txt;return node};
+  const routePath="M 38 150 C 104 136,143 160,206 136 S 318 149,375 112 S 478 132,522 70";
+  svg.append(sv("path",{d:"M0 207 L0 181 Q27 164 54 185 T110 185 Q150 159 188 187 T260 186 Q306 164 340 190 T409 186 Q459 169 503 187 T560 173 L560 225 L0 225Z",fill:"#202844",opacity:".9"}));
+  svg.append(sv("path",{d:"M0 218 Q69 190 130 211 T277 207 Q347 189 414 214 T560 207 L560 225 L0 225Z",fill:"#171e38",opacity:".88"}));
+  svg.append(sv("path",{d:routePath,fill:"none",stroke:"#8885b9","stroke-width":2.7,"stroke-linecap":"round","stroke-dasharray":"7 8"}));
+  [[54,42],[151,51],[299,34],[473,42]].forEach(([x,y])=>svg.append(sv("circle",{cx:x,cy:y,r:1.4,fill:"#bbb0df",opacity:".6"})));
+  // Начало — первая известная дата, а не искусственно выбранный день.
+  svg.append(sv("circle",{cx:38,cy:150,r:11,fill:"#73abfc",opacity:".18"}));
+  svg.append(sv("circle",{cx:38,cy:150,r:6,fill:"#87b9ff",stroke:"#dceaff","stroke-width":2}));
+  if(first){
+    svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},shortDate(first[1]).replace(/ \\d{4}$/,"")));
+  }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
+  // Последние пять реальных завершённых книг — только из списка пользователя.
+  const milestones=dated.slice(-5);
+  const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]].slice(5-milestones.length);
+  milestones.forEach(([id,date],i)=>{
+    const [x,y]=positions[i],isLast=i===milestones.length-1;
+    const group=sv("g",{"aria-label":BOOK[id].n+", "+shortDate(date)});
+    group.append(sv("title",{},BOOK[id].n+" · "+shortDate(date)));
+    group.append(sv("circle",{cx:x,cy:y,r:isLast?12:8,fill:isLast?"#32d6c9":"#ad91ed",opacity:".2"}));
+    group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:4.4,fill:isLast?"#55e4d5":"#d2b9ff",stroke:"#f7eeff","stroke-width":1.8}));
+    const raw=(BOOK[id].a||id).replace(/\\.$/,"");
+    const label=raw.length>10?raw.slice(0,9)+"…":raw;
+    const w=Math.min(80,Math.max(37,label.length*7.2+12));
+    const ly=(i%2===0?y-37:y+15);
+    group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:22,rx:8,fill:isLast?"#185f64":"#302b54",stroke:isLast?"#48dbcf":"#8b78ba","stroke-width":1.3}));
+    group.append(sv("text",{x,y:ly+15,fill:"#f5f5ff","font-size":12,"font-weight":"600","text-anchor":"middle"},label));
+    svg.append(group);
   });
-  // Для Жизнеизучений и других книг показываем как завершённые, так и начатые.
-  // Даты берём из фактических отметок — не из планового расписания.
-  [[lsAll,"Жизнеизучения","ls","#9d73e9",MSB.ls.length],
-    [oth,"Другие книги служения","other","#26a8a0",0]].forEach(([books,title,kind,color,total])=>{
-    const complete=books.filter(o=>o.full).length;
-    const items=books.map(o=>({
-      name:o.B.t,color,date:o.full?(shortDate(o.last)||"Прочитано"):(o.n?o.n+" из "+o.total+" · "+(shortDate(o.last)||"в процессе"):"Начато"),
-      tooltip:o.B.t+" · "+(o.full?"прочитана":o.n+" из "+o.total+" "+(kind==="ls"?"сообщений":"глав"))+(o.last?" · "+fmtLong(o.last):"")
-    }));
-    readingColumn(title,complete,total,items,kind);
-  });
-  sheet.append(el("div","plab","Книги по порядку чтения"),grid);
-  if(mine){const nb=nextBookHint();if(nb)sheet.append(el("p","bsnext","Ближе всего: «"+(FULL[nb.b]||nb.b)+"» — осталось "+nb.left+" "+plural(nb.left,"день","дня","дней")+" чтения"))}
+  // Флажок и конец маршрута — это цель, не зафиксированный факт.
+  svg.append(sv("path",{d:"M522 81 L522 31",stroke:"#ffe0a5","stroke-width":2.7}));
+  svg.append(sv("path",{d:"M523 31 Q535 25 545 34 L536 48 L523 45Z",fill:"#f6ae4b"}));
+  svg.append(sv("circle",{cx:522,cy:81,r:8,fill:doneBooks===66?"#55e4d5":"#f9ba64",stroke:"#ffe4ae","stroke-width":2}));
+  svg.append(sv("rect",{x:472,y:103,width:77,height:29,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
+  svg.append(sv("text",{x:510,y:115,fill:"#ffe29a","font-size":11,"font-weight":"700","text-anchor":"middle"},"Вся"));
+  svg.append(sv("text",{x:510,y:126,fill:"#ffe29a","font-size":11,"font-weight":"700","text-anchor":"middle"},"Библия"));
+  scene.append(svg,el("p","libroute-note",!dated.length?"Начните чтение — здесь появятся отметки прочитанных книг.":"Путь условный · точки — завершённые книги"+(canForecast?" · прогноз по текущему темпу":"")));
+  sheet.append(scene);
+  const steps=el("div","libroute-steps");
+  steps.append(el("h4",null,"Ближайшие шаги"));
+  const stepRows=el("div","libroute-steprows");
+  [["📖","Сейчас",doneBooks+" / 66"],
+    ["◷","Средний темп",pace],
+    ["▦","До финиша",duration]].forEach(([symbol,label,value])=>{
+      const row=el("div","libroute-steprow");
+      row.append(el("span","libroute-stepico",symbol),el("span","libroute-stepname",label),el("b",null,value));
+      stepRows.append(row);
+    });
+  steps.append(stepRows);
+  if(canForecast)steps.append(el("p","libroute-disclaimer","Прогноз приблизительный: книги различаются по объёму, а темп чтения может измениться."));
+  sheet.append(steps);
   modal.append(sheet);document.body.append(modal);
 }
 /* ---------- пройденные расписания и управление своими расписаниями ---------- */

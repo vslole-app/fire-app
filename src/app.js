@@ -1444,15 +1444,41 @@ function msShelf(){
   Object.entries(state.plans||{}).forEach(([id,x])=>{const d=x.def||(state.myScheds||{})[id];if(!d||!d.ms||!msBook(d.ms))return;
     let S;try{S=buildMs(d)}catch(e){return}
     const st=x.nt||{read:[],log:[]},rd=new Set(st.read||[]),when=new Map();(st.log||[]).forEach(l=>{if(!when.has(l.p)||l.d>when.get(l.p))when.set(l.p,l.d)});
-    const B=msBook(d.ms),o=out[d.ms]||(out[d.ms]={id:d.ms,B,total:B.m.length,done:new Set(),started:new Set(),last:"",first:"",on:false});
+    const B=msBook(d.ms),o=out[d.ms]||(out[d.ms]={id:d.ms,B,total:B.m.length,done:new Set(),started:new Set(),finishedDates:new Map(),last:"",first:"",on:false});
     if((state.extra||{})[id])o.on=true;
     if(d.paper)for(let n=1;n<(+d.from||1);n++){o.done.add(n);o.started.add(n)} // прочитано раньше, например в бумажной книге
     const rows=new Map();S.plan.forEach((r,p)=>{if(r[6])(rows.get(r[6])||rows.set(r[6],[]).get(r[6])).push(p)});
-    rows.forEach((ps,n)=>{const got=ps.filter(p=>rd.has(p));if(got.length)o.started.add(n);if(got.length===ps.length)o.done.add(n)});
+    rows.forEach((ps,n)=>{
+      const got=ps.filter(p=>rd.has(p));
+      if(got.length)o.started.add(n);
+      if(got.length!==ps.length)return;
+      o.done.add(n);
+      const date=ps.reduce((latest,p)=>when.get(p)>latest?when.get(p):latest,"");
+      if(date&&(!o.finishedDates.has(n)||date<o.finishedDates.get(n)))o.finishedDates.set(n,date);
+    });
     when.forEach(dt=>{if(dt>o.last)o.last=dt;if(!o.first||dt<o.first)o.first=dt});
   });
   return Object.values(out).filter(o=>o.started.size||o.on).map(o=>Object.assign(o,{n:o.done.size,pct:Math.round(o.done.size/o.total*100),full:o.done.size===o.total}))
     .sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:0);
+}
+function bibleReadingHistory(validDate){
+  const events=new Map();
+  const scan=(plan,keys,progress)=>keys.forEach(k=>{
+    const bi=T[k].bi;
+    for(const entry of progress[k]?.log||[]){
+      const id=plan[entry.p]?.[bi];
+      if(BOOK[id]&&validDate(entry.d))events.set(entry.d+"|"+id,{id,date:entry.d});
+    }
+  });
+  scan(PLAN,KEYS,state);
+  for(const [id,progress] of Object.entries(state.plans||{})){
+    const def=progress.def||state.myScheds?.[id]||{id};
+    if(def.ms)continue;
+    let schedule;
+    try{schedule=buildSched(def)}catch(e){continue}
+    scan(schedule.plan,schedule.keys,progress);
+  }
+  return [...events.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
 function openBooks(list,who,ministryBooks,embedded=false){
   const mine=!list; list=list||booksSummary();
@@ -1466,7 +1492,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const close=()=>{if(!modal)return;if(typeof globeCleanup==="function")globeCleanup();modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
   if(modal){modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc)}
   const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h);if(!embedded)head.append(x);
-  sheet.append(head);
+  if(!embedded)sheet.append(head);
   // В библиотеке друга берём только опубликованный краткий прогресс.
   // Отсутствие поля у старой версии — не ноль прочитанных книг.
   const ministryKnown=mine||Array.isArray(ministryBooks);
@@ -1515,15 +1541,17 @@ function openBooks(list,who,ministryBooks,embedded=false){
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
   // Мой путь: та же география книг, что на глобусе читателей.
-  // Здесь отмечаются ТОЛЬКО действительно завершённые книги.
+  // Тропинки строятся по отметкам чтения, а точки показывают завершённые книги.
   const validDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();
   const bible=list.filter(([id,d])=>BOOK[id]&&validDate(d))
     .map(([id,date])=>({id,date,name:BOOK[id].n,
       label:BOOK[id].a||id,kind:"bible"}));
-  const ministry=ms.filter(o=>o.full).map(o=>({
-    id:"ms:"+o.id,date:validDate(o.last)?o.last:"",
-    name:o.B.t,label:o.B.t,kind:o.B.k==="ls"?"ls":"ministry"
-  }));
+  const ministry=ms.filter(o=>o.full).map(o=>{
+    const date=mine?[...o.finishedDates.values()].sort().at(-1):o.last;
+    return {id:"ms:"+o.id,date:validDate(date)?date:"",
+      name:o.B.t,label:o.B.t,kind:o.B.k==="ls"?"ls":"ministry"};
+  });
+  const route=mine?bibleReadingHistory(validDate):bible;
   const history=bible.concat(ministry).sort((a,b)=>
     a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
   const heading=el("div","reading-globe-heading");
@@ -1533,7 +1561,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const bookDetail=el("div","reading-book-detail");
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
   const explain=el("p","reading-globe-hint",
-    "Вращайте глобус, приближайте и нажимайте на светящиеся книги, чтобы увидеть точную дату.");
+    "Вращайте глобус, приближайте и нажимайте на точки, чтобы увидеть книгу и дату.");
   sheet.append(heading,globeHost,bookDetail,explain);
   let globeCleanup=null;
   const mount=()=>{
@@ -1541,10 +1569,11 @@ function openBooks(list,who,ministryBooks,embedded=false){
     const G=window.OgonekGlobe;
     if(!G||typeof G.mountReading!=="function"){setTimeout(mount,180);return}
     globeHost.textContent="";
-    globeCleanup=G.mountReading(globeHost,history,item=>{
+    globeCleanup=G.mountReading(globeHost,history,route,items=>{
       bookDetail.hidden=false;
-      bookDetail.replaceChildren(el("b",null,item.name),el("span",null,
-        item.date?"Прочитана "+fmtLong(item.date):"Книга завершена, дата не указана"));
+      bookDetail.replaceChildren(...items.flatMap(item=>[
+        el("b",null,item.name),el("span",null,"Прочитана "+fmtLong(item.date))
+      ]));
     });
     if(embedded)window.__readingGlobeDestroy=globeCleanup;
   };
@@ -2282,7 +2311,7 @@ function msNew(){return false} /* новинка уже знакома всем 
 function libNew(){return false}
 function applyNew(){const nav=$("botNav");if(!nav)return;const pg=document.body.dataset.page||"home",on=msNew();
   const pb=[...nav.querySelectorAll(".bn")].find(b=>b.getAttribute("aria-label")==="Расписания");
-  const ab=[...nav.querySelectorAll(".bn")].find(b=>b.getAttribute("aria-label")==="Библиотека");
+  const ab=[...nav.querySelectorAll(".bn")].find(b=>b.getAttribute("aria-label")==="Моя библиотека");
   nav.querySelectorAll(".bnnew,.bnnewtip").forEach(n=>n.remove());nav.querySelectorAll(".bn.newglow").forEach(b=>b.classList.remove("newglow"));
   if(pb&&on&&!pb.classList.contains("need")){pb.classList.add("newglow");pb.append(el("span","bnnew","NEW"));
     if(pg!=="plan"){const t=el("span","bnnewtip","Новое: Жизнеизучение и книги служения ›");t.addEventListener("click",e=>{e.stopPropagation();setPage("plan");setTimeout(()=>openPlans(),250)});pb.append(t)}}
@@ -3376,8 +3405,7 @@ function renderChallenges(){
     const off=el("section","card spboff");off.id="spbOff";off.dataset.page="plan";sch.before(off);
     off.append(el("h2",null,"Основное расписание"),el("p","muted","Сейчас у вас только челлендж. Подключите общее расписание церкви в Санкт-Петербурге — вся Библия за 2 года вместе с друзьями."));
     const b=el("button","cbtn","Подключить основное расписание");b.type="button";b.addEventListener("click",()=>{setTrack("spb",true);toast("Основное расписание подключено")});off.append(b)
-    const off2=off.cloneNode(false);off2.id="spbOff2";off2.dataset.page="awards";off2.append(el("h2",null,"Библиотека"),el("p","muted","Алмазы и награды — за чтение по основному расписанию. В челлендже вы собираете ⭐ за вопросы и игры."));
-    const b2=el("button","cbtn","Подключить основное расписание");b2.type="button";b2.addEventListener("click",()=>{setTrack("spb",true);toast("Основное расписание подключено")});off2.append(b2);$("gemsCard").before(off2)}
+  }
   card.textContent="";const t=tracks(),c=confSt(),closed=confClosed(),on=t.conf&&!closed;
   card.append(el("div","chh","Челленджи · временные задания"));
   const item=el("div","chitem"+(on?" on":"")+(closed?" past":""));
@@ -3408,7 +3436,7 @@ window.confOpenChallenges=()=>{setPage("plan");setSchedView("conf")};
 
 
 /* ---------- Нижние вкладки, как в Duolingo: главная разгружена, остальное — по разделам ---------- */
-const PAGES_SPB=[["home","home","Главная"],["friends","friends","Друзья"],["awards","lib","Библиотека","Книги"],["plan","plan","Расписания","График"]];
+const PAGES_SPB=[["home","home","Главная"],["friends","friends","Друзья"],["awards","lib","Моя библиотека","Книги"],["plan","plan","Расписания","График"]];
 let curPage=(()=>{try{return sessionStorage.getItem("ogonek-page")||"home"}catch(e){return "home"}})();
 function pagesSetup(){
   if(pagesSetup.done)return;pagesSetup.done=true;
@@ -3418,7 +3446,7 @@ function pagesSetup(){
   [$("heroFlame")&&$("heroFlame").closest(".card"),$("testaments")&&$("testaments").closest(".card"),$("quizCard"),$("calendarCard"),$("progCard"),$("gemsCard"),$("awardsCard"),$("guideOpen")].forEach(n=>{if(n)n.dataset.spb="1"});
   ["quizCard","pathCard","confCard","installCard"].forEach(id=>tag($(id),"home"));
   ["friendsCard","inviteCard"].forEach(id=>tag($(id),"friends"));
-  ["gemsCard","libraryInline","readerConsole"].forEach(id=>tag($(id),"awards"));
+  ["gemsCard","libraryInline"].forEach(id=>tag($(id),"awards"));
   ["libCard","awardsCard"].forEach(id=>tag($(id),"profile"));
   ["schedule","calendarCard"].forEach(id=>tag($(id),"plan"));
   // «Прогресс плана» — в «План», «Как это работает» — в «Ещё»
@@ -3426,7 +3454,7 @@ function pagesSetup(){
   if(f2){f2.before(prog);f2.after(how);f2.remove()}tag(prog,"plan");tag(how,"profile"); // раздела «Ещё» больше нет — «Как это работает» и «Впервые читаете Библию?» в «Библиотеке»
   
   tag($("guideOpen"),"profile");
-  tag(document.querySelector(".app>.foot"),"awards");
+  tag(document.querySelector(".app>.foot"),"home");
   try{libLayout()}catch(e){console.warn(e)}
   // друзья без входа — подсказка
   const fe=el("section","card fempty");fe.id="friendsEmpty";fe.dataset.page="friends";
@@ -3566,51 +3594,9 @@ function libLayout(){
   const oldArchive=$("archCard");if(oldArchive)oldArchive.remove();
   const oldProgress=document.querySelector(".lprog");if(oldProgress)oldProgress.remove();
 }
-function renderReaderConsole(){
-  const host=$("readerConsole");if(!host)return;
-  host.textContent="";
-  const header=el("div","reader-console-head");
-  header.append(el("h2",null,"Мой пульт читателя"));
-  const go=el("button","btn reader-console-go","Открыть чтение");
-  go.type="button";go.addEventListener("click",()=>setPage("home"));
-  header.append(go);host.append(header);
-  const items=el("div","reader-console-list");
-  const addRow=(schedule,label,passage,done)=>{
-    const row=el("div","reader-console-row"),body=el("div","reader-console-body");
-    body.append(el("span","reader-console-schedule",schedule),el("b",null,label));
-    if(passage&&passage.book){
-      const link=el("a","reader-console-link",refStr(passage));
-      link.href=chapterUrl(passage);link.target="_blank";link.rel="noopener";
-      body.append(link);
-    }else body.append(el("span","reader-console-hint","Расписание прочитано"));
-    row.append(body,el("span",done?"reader-console-ok":"reader-console-next",done?"✓ Сегодня":"Следующий"));
-    items.append(row);
-  };
-  if(!noPlan()){
-    KEYS.forEach(k=>{
-      const p=nextP(k),passage=p<DAYS?part(k,p):null;
-      addRow(SCHED.name,T[k].label,passage,datesOf(k).has(today()));
-    });
-  }
-  Object.keys(state.extra||{}).forEach(id=>{
-    if(!state.extra[id]||id===SCHED.id)return;
-    const S=xS(id);if(!S)return;
-    S.keys.forEach(k=>{
-      const p=xNext(id,k);
-      if(p>=S.plan.length)return;
-      const passage=part2(S,k,p);
-      if(!passage||!passage.book)return;
-      addRow(S.name,k==="nt"?"Чтение":"Ветхий Завет",passage,
-        xToday(id,k).length>0);
-    });
-  });
-  if(!items.children.length)items.append(el("p","hint","Здесь появятся текущие книги и отрывки из ваших расписаний."));
-  host.append(items);
-}
 function showInlineLibrary(){
   if(!$("libraryInline"))return;
   openBooks(null,null,null,true);
-  renderReaderConsole();
 }
 function applyPage(){
   pagesSetup();

@@ -608,15 +608,44 @@
 
 
   /* ---------- личная история чтения на том же глобусе книг ---------- */
-  function mountReading(host, history, onSelect) {
+  const routePosition = (a, b, t) => nrm(a.map((v, i) => v + (b[i] - v) * t));
+  const dateValue = date => Date.parse(date + "T00:00:00Z");
+
+  function mountReading(host, history, reading, onSelect) {
     build();
     if (!host) return () => {};
-    const entries = (Array.isArray(history) ? history : []).map((item, i) => {
-      const n = item.kind === "bible" ? bookIndex(item.id) : -1;
-      // Книги служения находятся у отдельного сектора океана:
-      // это не новые страны Библии и не меняет глобус читателей.
-      const v = n >= 0 ? books[n].c : vec(-21 + (i % 5) * 3, -28 + (i % 7) * 2);
-      return Object.assign({}, item, { v, n });
+    const trails = [[], []];
+    for (const item of reading) {
+      const n = bookIndex(item.id);
+      if (n < 0) continue;
+      const trail = trails[n < 39 ? 0 : 1];
+      trail.push({ n, date: dateValue(item.date), v: books[n].c });
+    }
+    const entries = history.flatMap(item => {
+      if (!item.date) return [];
+      if (item.kind === "bible") {
+        const n = bookIndex(item.id);
+        return n < 0 ? [] : [{ ...item, v: books[n].c }];
+      }
+      const date = dateValue(item.date);
+      let closest = null;
+      for (const trail of trails) {
+        if (!trail.length) continue;
+        const index = trail.findIndex(point => point.date > date);
+        const before = index === 0 ? null : trail[index < 0 ? trail.length - 1 : index - 1];
+        const after = index < 0 ? null : trail[index];
+        const distance = Math.min(before ? date - before.date : Infinity, after ? after.date - date : Infinity);
+        if (!closest || distance < closest.distance ||
+            (distance === closest.distance && before && (!closest.before || before.date > closest.before.date))) {
+          closest = { before, after, distance };
+        }
+      }
+      if (!closest) return [];
+      const { before, after } = closest;
+      const v = before && after
+        ? routePosition(before.v, after.v, (date - before.date) / (after.date - before.date))
+        : (before || after).v;
+      return [{ ...item, v }];
     });
     const stage = el("div", "reading-globe-stage");
     const canvas = document.createElement("canvas");
@@ -630,11 +659,13 @@
       b.addEventListener("click", fn); controls.append(b); return b;
     };
     const last = entries[entries.length - 1];
-    const focus = last && last.v ? last.v : books[0].c;
+    const latestReading = trails.map(trail => trail.at(-1)).filter(Boolean)
+      .sort((a, b) => b.date - a.date)[0];
+    const focus = last?.v || latestReading?.v || books[0].c;
     let yaw = -Math.atan2(focus[0], focus[2]), pitch = Math.asin(focus[1]) * 0.6;
     const initialYaw = yaw, initialPitch = pitch;
-    let zoom = 1, sizeW = 0, sizeH = 0, dpr = 1, alive = true, drag = false;
-    const maxZoom = 5, pts = new Map(), hit = [];
+    let zoom = 1, sizeW = 0, sizeH = 0, dpr = 1, alive = true;
+    const maxZoom = 5, hit = [];
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const rotBook = v => {
       const a = Math.cos(yaw), b = Math.sin(yaw), c = Math.cos(pitch), d = Math.sin(pitch);
@@ -715,36 +746,45 @@
       }
       // Маршрут поверх карты; дальняя сторона скрыта земным шаром.
       hit.length=0;
-      if(entries.length>1){
-        ctx.save();ctx.shadowColor="#f9bc54";ctx.shadowBlur=9;ctx.strokeStyle="#ffd373";
-        ctx.lineWidth=3.1;ctx.setLineDash([8,5]);ctx.beginPath();
-        for(let i=1;i<entries.length;i++){
-          const a=entries[i-1].v,b=entries[i].v;
-          let opened=false;
-          for(let k=0;k<=28;k++){
-            const t=k/28,p=rotBook(nrm([a[0]*(1-t)+b[0]*t,a[1]*(1-t)+b[1]*t,a[2]*(1-t)+b[2]*t]));
-            if(p[2]>.012){
-              const x=cx+p[0]*R,y=cy-p[1]*R;
-              if(opened)ctx.lineTo(x,y);else{ctx.moveTo(x,y);opened=true;}
-            }else opened=false;
+      trails.forEach((trail, testament) => {
+        ctx.save();
+        ctx.strokeStyle = testament === 0 ? "#ffda8b" : "#a4edff";
+        ctx.lineWidth = 1.15;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        for (let i = 1; i < trail.length; i++) {
+          const a = trail[i - 1], b = trail[i];
+          if (a.n === b.n) continue;
+          let opened = false;
+          for (let k = 0; k <= 32; k++) {
+            const p = rotBook(routePosition(a.v, b.v, k / 32));
+            if (p[2] > .012) {
+              const x = cx + p[0] * R, y = cy - p[1] * R;
+              if (opened) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+              opened = true;
+            } else opened = false;
           }
-        }ctx.stroke();ctx.restore();
-      }
-      entries.forEach((e,i)=>{
+        }
+        ctx.stroke();
+        ctx.restore();
+      });
+      const markers = [...entries].sort((a, b) => Number(b.kind === "bible") - Number(a.kind === "bible"));
+      markers.forEach(e=>{
         const p=rotBook(e.v);
         if(p[2]<.03)return;
-        const x=cx+p[0]*R,y=cy-p[1]*R,latest=i===entries.length-1;
+        const x=cx+p[0]*R,y=cy-p[1]*R,latest=e===last;
         const color=e.kind==="bible"?"#ffb84a":"#ae86ff";
-        ctx.save();ctx.shadowColor=color;ctx.shadowBlur=latest?26:14;
-        ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,latest?8.2:6.2,0,TAU);ctx.fill();
-        ctx.shadowBlur=0;ctx.strokeStyle="#fff1cc";ctx.lineWidth=2.2;
-        ctx.beginPath();ctx.arc(x,y,latest?8.2:6.2,0,TAU);ctx.stroke();
+        const radius = e.kind === "bible" ? (latest ? 8.2 : 6.2) : 3.5;
+        ctx.save();ctx.shadowColor=color;ctx.shadowBlur=e.kind === "bible" ? (latest ? 26 : 14) : 5;
+        ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,radius,0,TAU);ctx.fill();
+        ctx.shadowBlur=0;ctx.strokeStyle="#fff1cc";ctx.lineWidth=e.kind === "bible" ? 2.2 : 1;
+        ctx.beginPath();ctx.arc(x,y,radius,0,TAU);ctx.stroke();
         ctx.restore();
         hit.push({x,y,e});
       });
       // Метка последней прочитанной книги и её дата.
       if(hit.length){
-        const lastVisible=hit.at(-1),item=lastVisible.e,txt=item.label||item.name;
+        const lastVisible=hit.reduce((a,b)=>b.e.date>=a.e.date?b:a),item=lastVisible.e,txt=item.label||item.name;
         const label=txt.length>16?txt.slice(0,15)+"…":txt;
         ctx.font="700 13px system-ui,sans-serif";ctx.textAlign="center";
         const w=Math.min(W*.65,Math.max(96,ctx.measureText(label).width+24)),x=clamp(lastVisible.x,7+w/2,W-7-w/2);
@@ -774,12 +814,12 @@
     });
     stage.append(controls);
     const pointers=new Map();
-    let lastMove=0,initialPinch=0,initialZoom=1,lastPoint=null;
+    let lastMove=0,initialPinch=0,initialZoom=1;
     const dist=()=>{const p=[...pointers.values()];return p.length<2?0:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)};
     canvas.addEventListener("pointerdown",ev=>{
       if(ev.pointerType==="mouse"&&ev.button!==0)return;
       pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
-      lastPoint={x:ev.clientX,y:ev.clientY};lastMove=0;
+      lastMove=0;
       if(pointers.size===2){initialPinch=dist();initialZoom=zoom;}
       try{canvas.setPointerCapture(ev.pointerId)}catch(e){}
     });
@@ -802,7 +842,11 @@
       const y=(ev.clientY-rect.top)*(sizeH/(rect.height||1));
       const target=hit.filter(q=>Math.hypot(q.x-x,q.y-y)<27)
         .sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];
-      if(target&&typeof onSelect==="function")onSelect(target.e);
+      if(target&&typeof onSelect==="function") {
+        const nearby = hit.filter(q => Math.hypot(q.x-target.x,q.y-target.y)<8)
+          .map(q => q.e).sort((a,b) => b.date.localeCompare(a.date));
+        onSelect(nearby);
+      }
     };
     canvas.addEventListener("pointerup",end);
     canvas.addEventListener("pointercancel",ev=>pointers.delete(ev.pointerId));

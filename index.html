@@ -12,7 +12,7 @@
 <title>В Слове — вся Библия за 2 года</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Golos+Text:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="styles/base.css?v=20261122-inline-library">
+<link rel="stylesheet" href="styles/base.css?v=20261122-library-routes">
 
 <link rel="stylesheet" href="styles/reading-map.css?v=20261122-ms-page-boxes">
 </head>
@@ -125,7 +125,6 @@
     <summary class="foldhead"><h2><span class="gemicon big" aria-hidden="true"></span>Алмазы</h2><span class="gemsum" id="gemSum"></span><span class="gemcount" id="gemCount">0</span><span class="chev" aria-hidden="true"></span></summary>
     <div class="foldbody"><div id="gemsBody"></div></div>
   </details>
-  <section class="card reader-console" id="readerConsole" data-page="awards" aria-label="Мой пульт читателя"></section>
 
   <details class="card fold" id="schedule" open>
     <summary class="foldhead"><h2 id="schedTitle">Мои расписания</h2><span class="chev" aria-hidden="true"></span></summary>
@@ -277,13 +276,13 @@
 <script src="src/award-visual.js?v=refactor6"></script>
 <script src="src/bible-verses.js?v=refactor7"></script>
 <script src="src/reading-progress.js?v=refactor8"></script>
-<script src="src/app.js?v=20261122-inline-library"></script>
+<script src="src/app.js?v=20261122-library-routes"></script>
 <script src="src/reading-groups.js?v=refactor1"></script>
-<script src="globe.js?v=20261122-reading-geography"></script>
+<script src="globe.js?v=20261122-library-routes"></script>
 <script type="module" src="auth.js?v=20261122-profile-archive-awards"></script>
 
 <script>/* автообновление: если на сайте вышла новая версия, а браузер показал старую из кэша — перезагрузить */
-(function(){var B="20261122210000";function chk(){try{/* сначала крошечный version.json (≈30 байт), если его нет — как раньше, весь index.html */fetch("version.json?b="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).catch(function(){return fetch("index.html?b="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():""})}).then(function(t){var m=/(?:var B=|"B":)\s*"(\d+)"/.exec(t);if(m&&m[1]>B){try{if(sessionStorage.getItem("ogonek-upd")===m[1])return;sessionStorage.setItem("ogonek-upd",m[1])}catch(e){}location.reload()}}).catch(function(){})}catch(e){}}
+(function(){var B="20261122210001";function chk(){try{/* сначала крошечный version.json (≈30 байт), если его нет — как раньше, весь index.html */fetch("version.json?b="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()}).catch(function(){return fetch("index.html?b="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():""})}).then(function(t){var m=/(?:var B=|"B":)\s*"(\d+)"/.exec(t);if(m&&m[1]>B){try{if(sessionStorage.getItem("ogonek-upd")===m[1])return;sessionStorage.setItem("ogonek-upd",m[1])}catch(e){}location.reload()}}).catch(function(){})}catch(e){}}
 setTimeout(chk,1500);document.addEventListener("visibilitychange",function(){if(!document.hidden)chk()})})();</script>
 <script src="src/keyboard.js?v=refactor1"></script>
 </body>

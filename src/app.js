@@ -1532,12 +1532,12 @@ function openBooks(list,who,ministryBooks){
     ?Math.ceil(daysRemaining/7)+" "+plural(Math.ceil(daysRemaining/7),"неделя","недели","недель")
     :Math.ceil(daysRemaining/30.44)+" "+plural(Math.ceil(daysRemaining/30.44),"месяц","месяца","месяцев"))
     :doneBooks===totalBooks?"0": "—";
-  const pace=canForecast?(perMonth>=10?Math.round(perMonth):perMonth.toFixed(1).replace(".",","))+" книг/мес":"Пока нет данных";
+  const pace=doneBooks===totalBooks?"Завершено":canForecast?(perMonth>=10?Math.round(perMonth):perMonth.toFixed(1).replace(".",","))+" книг/мес":"Пока нет данных";
   const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
   const heading=el("h3","libroute-title","Маршрут чтения");
   sheet.append(heading);
   const stats=el("div","libroute-stats");
-  [[ "📖","Пройдено",doneBooks+" книг"],
+  [[ "📖","Пройдено",doneBooks+" "+plural(doneBooks,"книга","книги","книг")],
     ["⌛","Осталось",String(leftBooks)],
     ["⚑","Финиш",finish]].forEach(([symbol,label,value])=>{
       const card=el("div","libroute-stat");
@@ -1563,7 +1563,8 @@ function openBooks(list,who,ministryBooks){
   svg.append(sv("circle",{cx:38,cy:150,r:11,fill:"#73abfc",opacity:".18"}));
   svg.append(sv("circle",{cx:38,cy:150,r:6,fill:"#87b9ff",stroke:"#dceaff","stroke-width":2}));
   if(first){
-    svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},shortDate(first[1]).replace(/ \d{4}$/,"")));
+    svg.append(sv("text",{x:38,y:173,fill:"#cfd5f3","font-size":13,"text-anchor":"middle"},parse(first[1]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})));
+    svg.append(sv("text",{x:38,y:187,fill:"#cfd5f3","font-size":12,"text-anchor":"middle"},String(parse(first[1]).getFullYear())));
   }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
   // Последние пять реальных завершённых книг — только из списка пользователя.
   const milestones=dated.slice(-5);

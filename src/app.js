@@ -1528,7 +1528,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
     a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
   const heading=el("div","reading-globe-heading");
   heading.append(el("h3",null,"Мой путь чтения"),
-    el("span",null,history.length+" "+plural(history.length,"книга","книги","книг")+" прочитано"));
+    el("span",null,"Прочитано: "+history.length+" "+plural(history.length,"книга","книги","книг")));
   const globeHost=el("div","reading-globe-host","Загружаю карту книг…");
   const bookDetail=el("div","reading-book-detail");
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");

@@ -1206,6 +1206,20 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 /* Библиотека: только график-маршрут под неизменённой книжной полкой. */
 .libroute-scene{flex:0 0 auto;min-width:0;min-height:190px;box-sizing:border-box;padding:10px 8px 9px;border:1px solid color-mix(in srgb,var(--link) 40%,var(--line));border-radius:15px;background:radial-gradient(ellipse at 70% 25%,rgba(99,83,168,.22),transparent 60%),linear-gradient(180deg,#202745,#161d36);overflow:hidden}
 .libroute-scene svg{display:block;width:100%;height:auto;aspect-ratio:560/225;overflow:visible}
+/* Управление маршрутом на телефоне: pinch, перемещение и точная дата. */
+.libroute-scene svg{touch-action:none;user-select:none;-webkit-user-select:none}
+.libroute-point{cursor:pointer;outline:none}
+.libroute-point:focus-visible{filter:drop-shadow(0 0 7px #fff)}
+.libroute-zoom{display:flex;align-items:center;justify-content:center;gap:9px;margin:6px 0 0;min-height:34px}
+.libroute-zoom-btn{width:35px;height:32px;border:1px solid #666f9d;border-radius:10px;background:#293452;color:#e5eaff;font:inherit;font-size:1.25rem;font-weight:700;line-height:1;cursor:pointer;touch-action:manipulation}
+.libroute-zoom-btn:disabled{opacity:.35;cursor:default}
+.libroute-zoom-btn:focus-visible{outline:2px solid #9bbaff;outline-offset:2px}
+.libroute-zoom-pct{min-width:49px;text-align:center;font-size:.78rem;font-weight:700;color:#d1d6f0;font-variant-numeric:tabular-nums}
+.libroute-detail{display:flex;flex-direction:column;gap:4px;margin:7px 2px 1px;padding:10px 12px;border-radius:10px;border:1px solid #5384ad;background:#132943;color:#eef6ff}
+.libroute-detail[hidden]{display:none}
+.libroute-detail strong{font-size:.89rem;line-height:1.35}
+.libroute-detail span{font-size:.78rem;line-height:1.35;color:#bde0ff}
+
 .libroute-point{filter:drop-shadow(0 0 2px rgba(193,161,255,.5))}
 .libroute-point.latest{filter:drop-shadow(0 0 6px rgba(74,239,220,.8));animation:librouteFlame 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 @keyframes librouteFlame{0%,100%{filter:drop-shadow(0 0 3px rgba(74,239,220,.65))}50%{filter:drop-shadow(0 0 9px rgba(74,239,220,.95))}}

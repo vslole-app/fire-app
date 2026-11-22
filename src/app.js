@@ -1514,11 +1514,17 @@ function openBooks(list,who,ministryBooks){
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
   sheet.append(cab,info);
-  // Под книжной полкой оставляем только маршрут прочитанных книг.
-  // Даты и подписи точек берём из настоящего прогресса читателя.
-  const dated=list
-    .filter(([a,d])=>BOOK[a]&&typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today())
-    .sort((a,b)=>a[1]<b[1]?-1:a[1]>b[1]?1:0);
+  // Маршрут объединяет завершённые книги Библии, Жизнеизучения
+  // и другие книги служения. Не показываем незавершённые книги и даты
+  // без подтверждённых отметок. Данные друзей берём из их профиля.
+  const completedDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();
+  const biblical=list.filter(([a,d])=>BOOK[a]&&completedDate(d))
+    .map(([a,d])=>({id:a,date:d,name:BOOK[a].n,label:(BOOK[a].a||a).replace(/\.$/,""),kind:"bible"}));
+  const ministry=ms.filter(o=>o.full&&completedDate(o.last))
+    .map(o=>({id:"ms:"+o.id,date:o.last,name:o.B.t,
+      label:o.B.k==="ls"?"ЖИ "+(o.B.a||o.B.t):o.B.t,kind:o.B.k==="ls"?"ls":"ministry"}));
+  const dated=biblical.concat(ministry)
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
   const first=dated[0],doneBooks=Math.min(66,read.size);
   const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
   const scene=el("div","libroute-scene");
@@ -1537,27 +1543,27 @@ function openBooks(list,who,ministryBooks){
   svg.append(sv("circle",{cx:38,cy:150,r:11,fill:"#73abfc",opacity:".18"}));
   svg.append(sv("circle",{cx:38,cy:150,r:6,fill:"#87b9ff",stroke:"#dceaff","stroke-width":2}));
   if(first){
-    svg.append(sv("text",{x:38,y:173,fill:"#cfd5f3","font-size":13,"text-anchor":"middle"},parse(first[1]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})));
-    svg.append(sv("text",{x:38,y:187,fill:"#cfd5f3","font-size":12,"text-anchor":"middle"},String(parse(first[1]).getFullYear())));
+    svg.append(sv("text",{x:38,y:173,fill:"#cfd5f3","font-size":13,"text-anchor":"middle"},parse(first.date).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})));
+    svg.append(sv("text",{x:38,y:187,fill:"#cfd5f3","font-size":12,"text-anchor":"middle"},String(parse(first.date).getFullYear())));
   }else svg.append(sv("text",{x:38,y:174,fill:"#cfd5f3","font-size":10,"text-anchor":"middle"},"Старт"));
-  // На маршруте всегда показываются последние завершённые книги.
-  // Новая книга автоматически занимает следующую светящуюся точку
-  // при повторном открытии библиотеки. Под каждой — дата завершения.
+  // Последние пять завершённых книг всех видов; новая книга
+  // появляется автоматически при следующем открытии библиотеки.
   const milestones=dated.slice(-5);
   const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]].slice(5-milestones.length);
-  milestones.forEach(([id,date],i)=>{
+  milestones.forEach((item,i)=>{
     const [x,y]=positions[i],isLast=i===milestones.length-1;
-    const name=BOOK[id].n,fullDate=shortDate(date);
-    const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point","aria-label":name+", прочитана "+fullDate});
-    group.append(sv("title",{},name+" · прочитана "+fullDate));
-    // Подсветка всех пройденных книг, у самой новой пламя ярче.
+    const {date,name,kind}=item,fullDate=shortDate(date);
+    const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point",
+      "aria-label":name+", прочитана "+fullDate});
+    group.append(sv("title",{},name+" · прочитана "+fullDate+
+      (kind==="ls"?" · Жизнеизучение":kind==="ministry"?" · Книга служения":" · Библия")));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
       fill:isLast?"#29dcd0":"#a78beb",opacity:isLast?".19":".14"}));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?11:9,
       fill:isLast?"#35e6d7":"#a98ced",opacity:".28"}));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?6.5:5,
       fill:isLast?"#59f0e4":"#d3bcff",stroke:"#ffffff","stroke-width":1.8}));
-    const raw=(BOOK[id].a||id).replace(/\.$/,"");
+    const raw=item.label;
     const label=raw.length>10?raw.slice(0,9)+"…":raw;
     const dateLabel=parse(date).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit"});
     const w=Math.min(90,Math.max(68,label.length*8.4+15));

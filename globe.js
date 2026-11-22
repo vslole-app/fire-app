@@ -606,5 +606,222 @@
   // стили кнопки на вкладке «Друзья» нужны сразу, а не только после первого открытия глобуса
   if (document.head) addCss(); else document.addEventListener("DOMContentLoaded", addCss);
 
-  window.OgonekGlobe = { open, close, setPeople, setVisible, bookIndex, schedulePosition, isOpen: () => !!root };
+
+  /* ---------- личная история чтения на том же глобусе книг ---------- */
+  function mountReading(host, history, onSelect) {
+    build();
+    if (!host) return () => {};
+    const entries = (Array.isArray(history) ? history : []).map((item, i) => {
+      const n = item.kind === "bible" ? bookIndex(item.id) : -1;
+      // Книги служения находятся у отдельного сектора океана:
+      // это не новые страны Библии и не меняет глобус читателей.
+      const v = n >= 0 ? books[n].c : vec(-21 + (i % 5) * 3, -28 + (i % 7) * 2);
+      return Object.assign({}, item, { v, n });
+    });
+    const stage = el("div", "reading-globe-stage");
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("aria-label", "Вращающийся глобус книг с последовательностью прочтения");
+    canvas.setAttribute("role", "img");
+    canvas.tabIndex = 0;
+    stage.append(canvas);
+    const controls = el("div", "reading-globe-controls");
+    const control = (t, label, fn) => {
+      const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-label", label);
+      b.addEventListener("click", fn); controls.append(b); return b;
+    };
+    const last = entries[entries.length - 1];
+    const focus = last && last.v ? last.v : books[0].c;
+    let yaw = -Math.atan2(focus[0], focus[2]), pitch = Math.asin(focus[1]) * 0.6;
+    const initialYaw = yaw, initialPitch = pitch;
+    let zoom = 1, sizeW = 0, sizeH = 0, dpr = 1, alive = true, drag = false;
+    const maxZoom = 5, pts = new Map(), hit = [];
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rotBook = v => {
+      const a = Math.cos(yaw), b = Math.sin(yaw), c = Math.cos(pitch), d = Math.sin(pitch);
+      const x = v[0] * a + v[2] * b, z = -v[0] * b + v[2] * a;
+      return [x, v[1] * c - z * d, v[1] * d + z * c];
+    };
+    const drawRing = (path, vs, cx, cy, R) => {
+      const pp = vs.map(rotBook);
+      if (!pp.some(v => v[2] > 0)) return false;
+      pp.forEach((v, i) => {
+        let x = v[0], y = v[1];
+        if (v[2] < 0) { const z = Math.hypot(x, y) || 1; x /= z; y /= z; }
+        const X = cx + x * R, Y = cy - y * R;
+        if (i) path.lineTo(X, Y); else path.moveTo(X, Y);
+      });
+      path.closePath(); return true;
+    };
+    const canvasContext = canvas.getContext("2d");
+    if (!canvasContext) return () => {};
+    const draw = () => {
+      if (!alive || !host.isConnected) return;
+      const ctx = canvasContext, W = sizeW || 360, H = sizeH || 360;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.fillStyle = "#090f29"; ctx.fillRect(0,0,W,H);
+      const R = Math.min(W * 0.475, H * 0.475) * zoom, cx = W / 2, cy = H / 2;
+      let g = ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R*1.22);
+      g.addColorStop(0,"rgba(75,159,255,.5)");g.addColorStop(1,"rgba(75,159,255,0)");
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.22,0,TAU);ctx.fill();
+      g=ctx.createRadialGradient(cx-R*0.45,cy-R*0.5,R*0.07,cx,cy,R);
+      g.addColorStop(0,"#478fe2");g.addColorStop(.6,"#18519c");g.addColorStop(1,"#081834");
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.fill();
+      ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.clip();
+      ctx.lineJoin="round";
+      CONT.forEach(cont => {
+        const land=new Path2D();
+        let visible=false;
+        cont.vs.forEach(vs=>{if(drawRing(land,vs,cx,cy,R))visible=true});
+        if(!visible)return;
+        ctx.save();ctx.clip(land);
+        cont.bk.forEach(book=>{
+          if(!book.poly.length)return;
+          const landBook=new Path2D();
+          if(!drawRing(landBook,book.poly,cx,cy,R))return;
+          const k=rotBook(book.c),light=.55+.45*Math.max(0,dot(k,L));
+          ctx.fillStyle="rgb("+book.col.map(v=>Math.round(v*light)).join(",")+")";
+          ctx.fill(landBook);ctx.lineWidth=.8;ctx.strokeStyle="rgba(46,36,21,.55)";ctx.stroke(landBook);
+        });
+        ctx.restore();
+      });
+      ctx.lineWidth=1.25;ctx.strokeStyle="rgba(254,234,190,.65)";
+      CONT.forEach(cont=>cont.vs.forEach(vs=>{
+        const pp=vs.map(rotBook);ctx.beginPath();
+        pp.forEach((v,i)=>{
+          const v2=pp[(i+1)%pp.length];
+          if(v[2]>.01&&v2[2]>.01){
+            ctx.moveTo(cx+v[0]*R,cy-v[1]*R);ctx.lineTo(cx+v2[0]*R,cy-v2[1]*R);
+          }
+        });ctx.stroke();
+      }));
+      ctx.restore();
+      ctx.strokeStyle="rgba(142,196,255,.65)";ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.stroke();
+      // Подписи реальных островов-книг — как у глобуса читателей.
+      if(zoom >= .9){
+        const visibleBooks = books.map(b => ({b,p:rotBook(b.c)})).filter(o=>o.p[2]>.52)
+          .sort((a,b)=>b.b.cells.length-a.b.cells.length);
+        const taken=[];
+        const font = zoom>2?13:11;
+        ctx.font="650 "+font+"px system-ui,sans-serif";ctx.textAlign="center";ctx.lineJoin="round";
+        for(const o of visibleBooks){
+          const x=cx+o.p[0]*R,y=cy-o.p[1]*R;
+          const width=ctx.measureText(o.b.name).width+8;
+          const b=[x-width/2,y-4,x+width/2,y+font+4];
+          if(taken.some(q=>b[0]<q[2]&&b[2]>q[0]&&b[1]<q[3]&&b[3]>q[1]))continue;
+          taken.push(b);ctx.lineWidth=2.7;ctx.strokeStyle="rgba(4,10,27,.8)";
+          ctx.strokeText(o.b.name,x,y);ctx.fillStyle="#f3f6ff";ctx.fillText(o.b.name,x,y);
+        }
+      }
+      // Маршрут поверх карты; дальняя сторона скрыта земным шаром.
+      hit.length=0;
+      if(entries.length>1){
+        ctx.save();ctx.shadowColor="#f9bc54";ctx.shadowBlur=9;ctx.strokeStyle="#ffd373";
+        ctx.lineWidth=3.1;ctx.setLineDash([8,5]);ctx.beginPath();
+        for(let i=1;i<entries.length;i++){
+          const a=entries[i-1].v,b=entries[i].v;
+          let opened=false;
+          for(let k=0;k<=28;k++){
+            const t=k/28,p=rotBook(nrm([a[0]*(1-t)+b[0]*t,a[1]*(1-t)+b[1]*t,a[2]*(1-t)+b[2]*t]));
+            if(p[2]>.012){
+              const x=cx+p[0]*R,y=cy-p[1]*R;
+              if(opened)ctx.lineTo(x,y);else{ctx.moveTo(x,y);opened=true;}
+            }else opened=false;
+          }
+        }ctx.stroke();ctx.restore();
+      }
+      entries.forEach((e,i)=>{
+        const p=rotBook(e.v);
+        if(p[2]<.03)return;
+        const x=cx+p[0]*R,y=cy-p[1]*R,latest=i===entries.length-1;
+        const color=e.kind==="bible"?"#ffb84a":"#ae86ff";
+        ctx.save();ctx.shadowColor=color;ctx.shadowBlur=latest?26:14;
+        ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,latest?8.2:6.2,0,TAU);ctx.fill();
+        ctx.shadowBlur=0;ctx.strokeStyle="#fff1cc";ctx.lineWidth=2.2;
+        ctx.beginPath();ctx.arc(x,y,latest?8.2:6.2,0,TAU);ctx.stroke();
+        ctx.restore();
+        hit.push({x,y,e});
+      });
+      // Метка последней прочитанной книги и её дата.
+      if(hit.length){
+        const lastVisible=hit.at(-1),item=lastVisible.e,txt=item.label||item.name;
+        const label=txt.length>16?txt.slice(0,15)+"…":txt;
+        ctx.font="700 13px system-ui,sans-serif";ctx.textAlign="center";
+        const w=Math.min(W*.65,Math.max(96,ctx.measureText(label).width+24)),x=clamp(lastVisible.x,7+w/2,W-7-w/2);
+        const y=clamp(lastVisible.y-58,8,H-55);
+        ctx.fillStyle="rgba(16,23,50,.94)";ctx.strokeStyle=item.kind==="bible"?"#ffbf61":"#ad8dff";ctx.lineWidth=1.6;
+        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x-w/2,y,w,42,9);ctx.fill();ctx.stroke();}
+        else{ctx.fillRect(x-w/2,y,w,42);ctx.strokeRect(x-w/2,y,w,42);}
+        ctx.fillStyle="#fff";ctx.fillText(label,x,y+17);
+        ctx.font="500 11px system-ui,sans-serif";ctx.fillStyle="#cbd3ed";
+        ctx.fillText(item.date?new Date(item.date+"T12:00:00").toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"}):"Дата не указана",x,y+32);
+      }
+    };
+    const resize=()=>{
+      if(!alive||!host.isConnected)return;
+      sizeW=Math.max(240,stage.clientWidth||host.clientWidth||360);
+      sizeH=Math.max(300,Math.min(475,sizeW*1.07));
+      dpr=Math.min(2,window.devicePixelRatio||1);
+      canvas.width=Math.round(sizeW*dpr);canvas.height=Math.round(sizeH*dpr);
+      canvas.style.width=sizeW+"px";canvas.style.height=sizeH+"px";
+      draw();
+    };
+    const zoomTo=v=>{zoom=clamp(v,.8,maxZoom);draw()};
+    control("+","Приблизить маршрут",()=>zoomTo(zoom*1.4));
+    control("−","Отдалить маршрут",()=>zoomTo(zoom/1.4));
+    control("⌖","Вернуть к последней книге",()=>{
+      yaw=initialYaw;pitch=initialPitch;zoom=1;draw();
+    });
+    stage.append(controls);
+    const pointers=new Map();
+    let lastMove=0,initialPinch=0,initialZoom=1,lastPoint=null;
+    const dist=()=>{const p=[...pointers.values()];return p.length<2?0:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)};
+    canvas.addEventListener("pointerdown",ev=>{
+      if(ev.pointerType==="mouse"&&ev.button!==0)return;
+      pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      lastPoint={x:ev.clientX,y:ev.clientY};lastMove=0;
+      if(pointers.size===2){initialPinch=dist();initialZoom=zoom;}
+      try{canvas.setPointerCapture(ev.pointerId)}catch(e){}
+    });
+    canvas.addEventListener("pointermove",ev=>{
+      const p=pointers.get(ev.pointerId);if(!p)return;
+      const dx=ev.clientX-p.x,dy=ev.clientY-p.y;
+      pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      lastMove+=Math.abs(dx)+Math.abs(dy);
+      if(pointers.size>=2&&initialPinch>1){zoom=clamp(initialZoom*dist()/initialPinch,.8,maxZoom);}
+      else if(pointers.size===1){yaw+=dx*.007/Math.sqrt(zoom);pitch=clamp(pitch+dy*.007/Math.sqrt(zoom),-1.4,1.4);}
+      draw();
+    });
+    const end=ev=>{
+      const p=pointers.get(ev.pointerId);
+      pointers.delete(ev.pointerId);
+      if(pointers.size===1){initialPinch=0;lastMove=20}
+      if(!p||lastMove>=8||pointers.size)return;
+      const rect=canvas.getBoundingClientRect();
+      const x=(ev.clientX-rect.left)*(sizeW/(rect.width||1));
+      const y=(ev.clientY-rect.top)*(sizeH/(rect.height||1));
+      const target=hit.filter(q=>Math.hypot(q.x-x,q.y-y)<27)
+        .sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];
+      if(target&&typeof onSelect==="function")onSelect(target.e);
+    };
+    canvas.addEventListener("pointerup",end);
+    canvas.addEventListener("pointercancel",ev=>pointers.delete(ev.pointerId));
+    canvas.addEventListener("wheel",ev=>{ev.preventDefault();zoomTo(zoom*(ev.deltaY<0?1.15:.87));},{passive:false});
+    canvas.addEventListener("keydown",ev=>{
+      if(ev.key==="ArrowLeft"){yaw-=.15;draw();ev.preventDefault()}
+      else if(ev.key==="ArrowRight"){yaw+=.15;draw();ev.preventDefault()}
+      else if(ev.key==="ArrowUp"){pitch=clamp(pitch-.15,-1.4,1.4);draw();ev.preventDefault()}
+      else if(ev.key==="ArrowDown"){pitch=clamp(pitch+.15,-1.4,1.4);draw();ev.preventDefault()}
+    });
+    host.append(stage);
+    const observer=window.ResizeObserver?new ResizeObserver(resize):null;
+    if(observer)observer.observe(stage);else window.addEventListener("resize",resize);
+    requestAnimationFrame(resize);
+    return ()=>{
+      alive=false;if(observer)observer.disconnect();else window.removeEventListener("resize",resize);
+      stage.remove();
+    };
+  }
+
+  window.OgonekGlobe = { open, close, setPeople, setVisible, bookIndex, schedulePosition, mountReading, isOpen: () => !!root };
 })();

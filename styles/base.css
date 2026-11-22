@@ -1204,8 +1204,8 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .ogsex small{display:block;font-size:.72rem;font-weight:700;opacity:.85;margin-top:2px}
 
 /* Библиотека: только график-маршрут под неизменённой книжной полкой. */
-.libroute-scene{min-width:0;padding:10px 8px 9px;border:1px solid color-mix(in srgb,var(--link) 40%,var(--line));border-radius:15px;background:radial-gradient(ellipse at 70% 25%,rgba(99,83,168,.22),transparent 60%),linear-gradient(180deg,#202745,#161d36);overflow:hidden}
-.libroute-scene svg{display:block;width:100%;height:auto;overflow:visible}
+.libroute-scene{flex:0 0 auto;min-width:0;min-height:190px;box-sizing:border-box;padding:10px 8px 9px;border:1px solid color-mix(in srgb,var(--link) 40%,var(--line));border-radius:15px;background:radial-gradient(ellipse at 70% 25%,rgba(99,83,168,.22),transparent 60%),linear-gradient(180deg,#202745,#161d36);overflow:hidden}
+.libroute-scene svg{display:block;width:100%;height:auto;aspect-ratio:560/225;overflow:visible}
 .libroute-point{filter:drop-shadow(0 0 2px rgba(193,161,255,.5))}
 .libroute-point.latest{filter:drop-shadow(0 0 6px rgba(74,239,220,.8));animation:librouteFlame 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 @keyframes librouteFlame{0%,100%{filter:drop-shadow(0 0 3px rgba(74,239,220,.65))}50%{filter:drop-shadow(0 0 9px rgba(74,239,220,.95))}}

@@ -1529,6 +1529,19 @@ function openBooks(list,who,ministryBooks){
     .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
   const first=dated.find(o=>o.date)||null,doneBooks=Math.min(66,read.size);
   const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
+  // Увеличение остаётся только внутри маршрута; книжную полку и
+  // прокрутку остального окна библиотеки не затрагиваем.
+  const routeInfo=el("div","libroute-detail");
+  routeInfo.hidden=true;routeInfo.setAttribute("aria-live","polite");
+  let blockRouteTapUntil=0;
+  function showRouteBook(item){
+    if(Date.now()<blockRouteTapUntil)return;
+    routeInfo.replaceChildren(
+      el("strong",null,item.name),
+      el("span",null,item.date?"Прочитана "+fmtLong(item.date):"Дата завершения не указана")
+    );
+    routeInfo.hidden=false;
+  }
   const scene=el("div","libroute-scene");
   const NS="http://www.w3.org/2000/svg";
   const svg=document.createElementNS(NS,"svg");
@@ -1565,7 +1578,11 @@ function openBooks(list,who,ministryBooks){
     const {date,name,kind}=item,fullDate=date?shortDate(date):"дата не указана";
     const dateText=date?"прочитана "+fullDate:"прочитана, дата не указана";
     const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point",
-      "aria-label":name+", "+dateText});
+      "role":"button","tabindex":"0","aria-label":name+", "+dateText});
+    group.addEventListener("click",()=>showRouteBook(item));
+    group.addEventListener("keydown",ev=>{
+      if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();showRouteBook(item)}
+    });
     group.append(sv("title",{},name+" · "+dateText+
       (kind==="ls"?" · Жизнеизучение":kind==="ministry"?" · Книга служения":" · Библия")));
     group.append(sv("circle",{cx:x,cy:y,r:isLast?17:14,
@@ -1595,7 +1612,91 @@ function openBooks(list,who,ministryBooks){
   svg.append(sv("rect",{x:468,y:103,width:82,height:36,rx:9,fill:"#3f301b",stroke:"#ffc765","stroke-width":1.2}));
   svg.append(sv("text",{x:509,y:118,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Вся"));
   svg.append(sv("text",{x:509,y:133,fill:"#ffe29a","font-size":15,"font-weight":"700","text-anchor":"middle"},"Библия"));
-  scene.append(svg);
+  // viewBox ограничен исходной картой: zoom x1–x5 без пустых полей.
+  const ZW=560,ZH=225,maxZoom=5;
+  let viewport={x:0,y:0,w:ZW,h:ZH},zoom=1;
+  const zoomRow=el("div","libroute-zoom");
+  const btn=(label,title)=>{
+    const b=el("button","libroute-zoom-btn",label);
+    b.type="button";b.setAttribute("aria-label",title);return b;
+  };
+  const minus=btn("−","Уменьшить график");
+  const plus=btn("+","Приблизить график");
+  const reset=btn("↺","Показать весь график");
+  const zoomText=el("span","libroute-zoom-pct","100%");
+  zoomRow.append(minus,zoomText,plus,reset);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const updateZoom=()=>{
+    svg.setAttribute("viewBox",[viewport.x,viewport.y,viewport.w,viewport.h].join(" "));
+    zoomText.textContent=Math.round(zoom*100)+"%";
+    minus.disabled=zoom<=1.001;plus.disabled=zoom>=maxZoom-.001;
+    reset.disabled=zoom<=1.001;
+  };
+  // Центрирование на точке пальцев или на середине при нажатии кнопки.
+  const changeZoom=(desired,focusX=viewport.x+viewport.w/2,focusY=viewport.y+viewport.h/2)=>{
+    const target=clamp(desired,1,maxZoom);
+    const fx=(focusX-viewport.x)/viewport.w,fy=(focusY-viewport.y)/viewport.h;
+    const w=ZW/target,h=ZH/target;
+    viewport={x:clamp(focusX-fx*w,0,ZW-w),y:clamp(focusY-fy*h,0,ZH-h),w,h};
+    zoom=target;updateZoom();
+  };
+  const pan=(dx,dy)=>{
+    if(zoom<=1)return;
+    const rect=svg.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    viewport.x=clamp(viewport.x-dx/rect.width*viewport.w,0,ZW-viewport.w);
+    viewport.y=clamp(viewport.y-dy/rect.height*viewport.h,0,ZH-viewport.h);
+    updateZoom();
+  };
+  const fromClient=(x,y)=>{
+    const rect=svg.getBoundingClientRect();
+    return {x:viewport.x+clamp((x-rect.left)/(rect.width||1),0,1)*viewport.w,
+      y:viewport.y+clamp((y-rect.top)/(rect.height||1),0,1)*viewport.h};
+  };
+  const pointers=new Map();
+  let pinch=null;
+  const pinchInfo=()=>{
+    const [a,b]=[...pointers.values()];
+    if(!a||!b)return null;
+    return {dist:Math.hypot(a.x-b.x,a.y-b.y),
+      x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+  };
+  svg.addEventListener("pointerdown",ev=>{
+    if(ev.pointerType==="mouse"&&ev.button!==0)return;
+    pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+    if(pointers.size===2)pinch=pinchInfo();
+  });
+  svg.addEventListener("pointermove",ev=>{
+    const old=pointers.get(ev.pointerId);if(!old)return;
+    const dx=ev.clientX-old.x,dy=ev.clientY-old.y;
+    pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+    if(pointers.size>=2){
+      const current=pinchInfo();
+      if(current&&pinch&&pinch.dist>0&&current.dist>0){
+        const focus=fromClient(current.x,current.y);
+        changeZoom(zoom*current.dist/pinch.dist,focus.x,focus.y);
+        pan(current.x-pinch.x,current.y-pinch.y);
+        blockRouteTapUntil=Date.now()+350;
+      }
+      pinch=current;
+    }else if(zoom>1&&(Math.abs(dx)>0||Math.abs(dy)>0)){
+      pan(dx,dy);
+      if(Math.hypot(dx,dy)>1)blockRouteTapUntil=Date.now()+350;
+    }
+  });
+  const endPointer=ev=>{pointers.delete(ev.pointerId);pinch=pointers.size===2?pinchInfo():null};
+  svg.addEventListener("pointerup",endPointer);
+  svg.addEventListener("pointercancel",endPointer);
+  svg.addEventListener("lostpointercapture",endPointer);
+  plus.addEventListener("click",()=>changeZoom(zoom*1.5));
+  minus.addEventListener("click",()=>changeZoom(zoom/1.5));
+  reset.addEventListener("click",()=>changeZoom(1));
+  svg.addEventListener("dblclick",ev=>{
+    ev.preventDefault();const p=fromClient(ev.clientX,ev.clientY);
+    changeZoom(zoom*1.5,p.x,p.y);
+  });
+  updateZoom();
+  scene.append(svg,zoomRow,routeInfo);
   sheet.append(scene);
   modal.append(sheet);document.body.append(modal);
 }

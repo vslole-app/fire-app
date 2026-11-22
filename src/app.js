@@ -1520,17 +1520,19 @@ function openBooks(list,who,ministryBooks){
   const completedDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();
   const biblical=list.filter(([a,d])=>BOOK[a]&&completedDate(d))
     .map(([a,d])=>({id:a,date:d,name:BOOK[a].n,label:(BOOK[a].a||a).replace(/\.$/,""),kind:"bible"}));
-  const ministry=ms.filter(o=>o.full&&completedDate(o.last))
-    .map(o=>({id:"ms:"+o.id,date:o.last,name:o.B.t,
+  // Книга служения на полке может быть завершена и без даты (например,
+  // при переносе бумажного чтения). Отображаем её, но дату не выдумываем.
+  const ministry=ms.filter(o=>o.full)
+    .map(o=>({id:"ms:"+o.id,date:completedDate(o.last)?o.last:"",name:o.B.t,
       label:o.B.k==="ls"?"ЖИ "+(o.B.a||o.B.t):o.B.t,kind:o.B.k==="ls"?"ls":"ministry"}));
   const dated=biblical.concat(ministry)
     .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.name.localeCompare(b.name,"ru"));
-  const first=dated[0],doneBooks=Math.min(66,read.size);
+  const first=dated.find(o=>o.date)||null,doneBooks=Math.min(66,read.size);
   const shortDate=d=>d?parse(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
   const scene=el("div","libroute-scene");
   const NS="http://www.w3.org/2000/svg";
   const svg=document.createElementNS(NS,"svg");
-  svg.setAttribute("viewBox","0 0 560 225");svg.setAttribute("role","img");
+  svg.setAttribute("viewBox","0 0 560 225");svg.setAttribute("width","560");svg.setAttribute("height","225");svg.setAttribute("role","img");
   svg.setAttribute("aria-label","Условный маршрут: отмечены последние прочитанные книги и финиш");
   svg.setAttribute("preserveAspectRatio","xMidYMid meet");
   const sv=(tag,attrs={},txt)=>{const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));if(txt!=null)node.textContent=txt;return node};
@@ -1549,10 +1551,18 @@ function openBooks(list,who,ministryBooks){
   // Последние пять завершённых книг всех видов; новая книга
   // появляется автоматически при следующем открытии библиотеки.
   const milestones=dated.slice(-5);
-  const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]].slice(5-milestones.length);
-  milestones.forEach((item,i)=>{
-    const [x,y]=positions[i],isLast=i===milestones.length-1;
-    const {date,name,kind}=item,fullDate=shortDate(date);
+  const positions=[[122,145],[211,136],[300,127],[390,123],[465,105]];
+  // Серые точки видны с самого начала; при завершении книги
+  // они последовательно загораются слева направо.
+  const litPath=positions.slice(0,milestones.length);
+  if(litPath.length)svg.append(sv("path",{d:"M 38 150 "+litPath.map(([x,y])=>"L "+x+" "+y).join(" "),
+    fill:"none",stroke:"#58dacf","stroke-width":3,"stroke-linecap":"round",opacity:".9"}));
+  positions.forEach(([x,y],i)=>{
+    const item=milestones[i];
+    if(!item){svg.append(sv("circle",{cx:x,cy:y,r:7.5,
+      fill:"#434764",stroke:"#9294bd","stroke-width":2,opacity:".85"}));return}
+    const isLast=i===milestones.length-1;
+    const {date,name,kind}=item,fullDate=date?shortDate(date):"дата не указана";
     const group=sv("g",{"class":isLast?"libroute-point latest":"libroute-point",
       "aria-label":name+", прочитана "+fullDate});
     group.append(sv("title",{},name+" · прочитана "+fullDate+
@@ -1565,7 +1575,8 @@ function openBooks(list,who,ministryBooks){
       fill:isLast?"#59f0e4":"#d3bcff",stroke:"#ffffff","stroke-width":1.8}));
     const raw=item.label;
     const label=raw.length>10?raw.slice(0,9)+"…":raw;
-    const dateLabel=parse(date).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"2-digit"});
+    const dateLabel=date?parse(date).toLocaleDateString("ru-RU",
+      {day:"2-digit",month:"2-digit",year:"2-digit"}):"без даты";
     const w=Math.min(90,Math.max(68,label.length*8.4+15));
     const ly=y-64;
     group.append(sv("rect",{x:x-w/2,y:ly,width:w,height:48,rx:9,

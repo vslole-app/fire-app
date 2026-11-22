@@ -1202,3 +1202,20 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .ogsex.arm{border-color:#ff8a1f!important;background:rgba(255,138,31,.22)!important;animation:armpulse 1s ease-in-out infinite}
 .gsheet .ogsex.arm{color:var(--ink)}
 .ogsex small{display:block;font-size:.72rem;font-weight:700;opacity:.85;margin-top:2px}
+
+/* Библиотека: прочитанные книги по датам — два столбца, полку не затрагиваем. */
+.bsread-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
+.bsread-col{display:flex;flex-direction:column;min-width:0;gap:7px;padding:8px 7px 9px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
+.bsread-head{display:flex;align-items:baseline;justify-content:space-between;gap:3px;min-height:31px}
+.bsread-head h3{margin:0;min-width:0;font-family:var(--display);font-size:1.03rem;line-height:1.1;font-weight:700;color:var(--ink)}
+.bsread-head span{flex:none;color:var(--muted);font-size:.74rem;font-weight:700;white-space:nowrap}
+.bsread-list{display:flex;flex-direction:column;gap:5px;min-width:0}
+.bsread-item{display:flex;gap:6px;min-width:0;align-items:stretch;padding:7px 6px;border-radius:9px;background:var(--bg)}
+.bsread-item[hidden]{display:none}
+.bsread-mark{flex:0 0 4px;align-self:stretch;border-radius:3px;min-height:30px}
+.bsread-detail{display:flex;flex-direction:column;min-width:0;flex:1;gap:3px}
+.bsread-name{font-size:.79rem;line-height:1.2;font-weight:700;color:var(--ink);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.bsread-when{color:var(--muted);font-size:.7rem;line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bsread-toggle{margin-top:auto;width:100%;padding:7px 3px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--link);font:inherit;font-size:.73rem;font-weight:700;cursor:pointer}
+.bsread-toggle:hover,.bsread-toggle:focus-visible{border-color:var(--link)}
+@media (max-width:360px){.bsread-grid{gap:5px}.bsread-col{padding:7px 5px}.bsread-head h3{font-size:.92rem}.bsread-head span{font-size:.68rem}.bsread-item{gap:4px;padding:6px 4px}.bsread-name{font-size:.74rem}.bsread-when{font-size:.67rem}}

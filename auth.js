@@ -5,7 +5,7 @@ import { createFriendActions } from "./src/friend-actions.js?v=refactor11";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
-import { fKeys,fLabel,fShort,fDone,fRef,fUrl,fLit,fProfileReadToday,fScheduleReadToday,fLiveAhead } from "./src/friend-progress.js?v=live-pace-1";
+import { fKeys,fLabel,fShort,fDone,fRef,fUrl,fLit,fGlobeReadToday,fProfileReadToday,fScheduleReadToday,fLiveAhead } from "./src/friend-progress.js?v=live-pace-1";
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 const $ = (id) => document.getElementById(id);
@@ -441,11 +441,15 @@ async function main() {
     else target.append(el("b", null, ref));
   }
 
-  // расписание друга: у каждого может быть своё — показываем его собственные отрывки
-  function friendPassages(d) {
-    const s = d && d.globeSchedule;
-    return s && Array.isArray(s.passages) && s.passages.length
-      ? s.passages.filter(p => p && typeof p.ref === "string").slice(0, 3) : null;
+  // У старых профилей выбранное Жизнеизучение может скрыть активный план Библии.
+  function readingSchedule(d) {
+    const chosen = d.globeSchedule;
+    const G = window.OgonekGlobe;
+    if (!G || !chosen || d.noPlan === true || d.paceMeta?.daily === false ||
+        chosen.passages?.some(p => G.bookIndex(p?.ref) >= 0)) return chosen;
+    const passages = fKeys(d).filter(k => !fDone(d, k) && G.bookIndex(d[k + "Ref"]) >= 0)
+      .map(k => ({key:k, ref:d[k + "Ref"], url:fUrl(d,k), label:fLabel(d,k), last:d[k + "Last"] || ""}));
+    return passages.length ? {name:d.planName || "Библия", passages} : chosen;
   }
   function friendRow(d, isMe, uid) {
     const t = O().today(), row = el("div", "friend" + (isMe ? " me" : ""));
@@ -567,14 +571,16 @@ async function main() {
     [[d.streak || 0, "подряд"], [d.best || 0, "рекорд"], [(d.ntRead || 0) + (d.otRead || 0), "отрывков"], [d.gems || 0, "алмазов"]].forEach(([v, l]) => { const c = el("div", "fstat"); c.append(el("b", null, String(v)), el("span", null, l)); stats.append(c); });
 
     const reading = el("div", "freading"); reading.append(el("span", "label", "Где читает"));
-    const passages = friendPassages(d);
-    if (passages) {
-      reading.append(el("small", "hint", "Расписание: " + (d.globeSchedule.name || d.planName || "Моё расписание")));
+    const schedule = readingSchedule(d);
+    const passages = Array.isArray(schedule?.passages)
+      ? schedule.passages.filter(p => p && typeof p.ref === "string").slice(0, 3) : [];
+    if (passages.length) {
+      reading.append(el("small", "hint", "Расписание: " + (schedule.name || d.planName || "Моё расписание")));
       passages.forEach((p) => {
         const row = el("div", "frow"), left = el("div");
-        const samePlan = d.globeSchedule.name === d.planName;
+        const samePlan = schedule.name === d.planName;
         const matchingKey = samePlan ? fKeys(d).find(k => fRef(d,k) === p.ref && (!p.key || p.key === k)) : null;
-        const pace = fLiveAhead(d, p.key || matchingKey, t, p);
+        const pace = fLiveAhead(d, p.key || matchingKey, t, schedule === d.globeSchedule ? p : null);
         const label = p.label === "НЗ" ? "Новый Завет" : p.label === "ВЗ" ? "Ветхий Завет" : p.label || "Отрывок";
         left.append(el("small", null, label + (pace === null ? " · нет данных о темпе" : " · " + fmtAhead(pace))));
         const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === "https:" ? x.href : ""; } catch (_) { return ""; } };
@@ -834,7 +840,7 @@ async function main() {
       return {
         name: String(name || "Читатель").slice(0, 60), photo: photo || "",
         streak: s.streak || 0, seen: t, fc: fc || 0,
-        ...G.schedulePosition(s.globeSchedule, t),
+        ...G.schedulePosition(readingSchedule(s), t),
       };
     }
     let b = -1;
@@ -878,8 +884,15 @@ async function main() {
     Object.keys(friendData).forEach((uid) => {
       const d = friendData[uid]; if (!d) return;
       if (d.globeHide) { byId.delete(uid); return; }
-      // Do not overwrite a recent globe document with a stale cached profile.
-      if (!byId.has(uid)) {
+      const live = byId.get(uid);
+      if (live?.b === -1 && !live.spots?.some(spot => spot && spot.b >= 0)) {
+        const position = G.schedulePosition(readingSchedule(d), O().today());
+        if (position.b >= 0) {
+          byId.set(uid, {...live, b:position.b, refs:position.refs, plan:position.plan,
+            spots:position.spots.map(spot => ({...spot, l:fGlobeReadToday(live,O().today())}))});
+        }
+      }
+      if (!live) {
         try { byId.set(uid, Object.assign(globeFrom(d, d.name, d.photo, (d.friends || []).length), { id: uid, rel: relOf(uid) })); }
         catch (e) { console.warn(e); }
       }

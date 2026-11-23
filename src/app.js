@@ -2048,8 +2048,13 @@ function chooseMainSchedule(id){
   renderSchedList();
 }
 function globeSchedule(){
-  const row=mainSchedule(schedRows());
-  if(!row)return null;
+  const rows=schedRows(), selected=mainSchedule(rows);
+  if(!selected)return null;
+  const row=selected.def?.ms ? rows.find(r=>{
+    if(r.kind==="conf"||r.def?.ms)return false;
+    const S=r.primary?SCHED:xS(r.id);
+    return S&&!S.ms&&S.keys.some(k=>(r.primary?nextP(k):xNext(r.id,k))<S.plan.length);
+  })||selected : selected;
   if(row.kind==="conf"){
     const units=confToday(),read=confReadWhen(),t=today();
     const passages=[...new Set(units.map(u=>u.b))].map(book=>{
@@ -2197,7 +2202,7 @@ function renderSchedList(){
     if(rows.length){
       const main=mainSchedule(rows), ordered=[main,...rows.filter(r=>r!==main)];
       L.append(el("div","slgrp","Читаю · "+rows.length));
-      L.append(el("p","hint","На глобусе видны отрывки и пламя главного расписания."));
+      L.append(el("p","hint","При параллельном чтении Библии и книг служения глобус показывает отрывки из Библии."));
       ordered.forEach((r,i)=>{
         const entry=card(r);
         const lb=el("div","schedno sllab"+(i===0?" main":""),i===0?"✓ Главное расписание":"Расписание "+(i+1));

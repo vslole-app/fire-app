@@ -1,5 +1,5 @@
 // Optional analytics; off by default. Never send app account IDs or reading data.
-export function createGlobeAnalytics({ app, sdk, measurementId }) {
+export function createGlobeAnalytics({ app, sdk, measurementId, loadAnalytics = () => import(sdk + "firebase-analytics.js") }) {
   const key = "vslove-analytics-consent-v1";
   const available = /^G-[A-Z0-9]+$/.test(measurementId || "");
   let consent = false;
@@ -11,8 +11,9 @@ export function createGlobeAnalytics({ app, sdk, measurementId }) {
     if (!consent || !available) return Promise.resolve(null);
     if (client) return Promise.resolve(client);
     if (!initializing) initializing = (async () => {
-      const api = await import(sdk + "firebase-analytics.js");
+      const api = await loadAnalytics();
       if (!consent || !await api.isSupported() || !consent) return null;
+      api.setConsent({ ...deniedAds, analytics_storage: "granted" });
       const analytics = api.initializeAnalytics(app, { config: {
         send_page_view: false,
         allow_google_signals: false,
@@ -44,5 +45,12 @@ export function createGlobeAnalytics({ app, sdk, measurementId }) {
       c.api.logEvent(c.analytics, "readers_globe_open");
     }).catch(() => {});
   }
+  window.addEventListener("storage", (event) => {
+    if (event.key === key || event.key === null) {
+      let enabled = false;
+      try { enabled = localStorage.getItem(key) === "yes"; } catch (_) {}
+      if (enabled !== consent) setConsent(enabled);
+    }
+  });
   return { available, enabled: () => consent, setConsent, recordOpen };
 }

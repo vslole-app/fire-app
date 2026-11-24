@@ -596,7 +596,6 @@
     document.addEventListener("keydown", esc);
     stat(); card();
     raf = requestAnimationFrame(frame);
-    window.dispatchEvent(new Event("vslove:readers-globe-open"));
   }
 
   // человек, читающий оба завета, стоит на обеих книгах — на каждой свой огонёк

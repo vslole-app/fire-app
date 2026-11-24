@@ -1,5 +1,5 @@
 // Вход через Google (Firebase Authentication), прогресс и друзья (Cloud Firestore).
-import { firebaseConfig } from "./firebase-config.js?v=202610031821";
+import { firebaseConfig } from "./firebase-config.js?v=20261124-analytics";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
 import { createFriendActions } from "./src/friend-actions.js?v=refactor11";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";

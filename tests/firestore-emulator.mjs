@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {initializeTestEnvironment,assertSucceeds,assertFails} from "@firebase/rules-unit-testing";
-import {doc,setDoc,getDoc,deleteDoc,serverTimestamp,onSnapshot,writeBatch} from "firebase/firestore";
+import {doc,setDoc,getDoc,deleteDoc,serverTimestamp,onSnapshot,writeBatch,increment,getDocs,collection} from "firebase/firestore";
 import {readFileSync} from "node:fs";
 const env=await initializeTestEnvironment({projectId:"demo-v-slove",firestore:{rules:readFileSync("firestore.rules","utf8")}});
 try {
@@ -74,5 +74,25 @@ try {
  await assertFails(setDoc(doc(a,path),msg));
  // The invitation kind is independent of this reading-presence check.
  await assertSucceeds(setDoc(doc(a,path+"_inv"),{...msg,kind:"invite"}));
+ // Only signed-in clients may increment a single counter for the current UTC day.
+ const utcDay=new Date().toISOString().slice(0,10), countPath="section_counts/"+utcDay;
+ const open=(db,k)=>setDoc(doc(db,countPath),{[k]:increment(1)},{merge:true});
+ await assertSucceeds(open(a,"home"));
+ await assertSucceeds(open(b,"globe"));
+ await assertSucceeds(open(a,"globe"));
+ await assertSucceeds(open(b,"library"));
+ await assertFails(open(env.unauthenticatedContext().firestore(),"home"));
+ await assertFails(getDoc(doc(a,countPath)));
+ await assertFails(getDocs(collection(b,"section_counts")));
+ await assertFails(deleteDoc(doc(a,countPath)));
+ await assertFails(setDoc(doc(a,countPath),{globe:increment(2)},{merge:true}));
+ await assertFails(setDoc(doc(a,countPath),{home:increment(1),library:increment(1)},{merge:true}));
+ await assertFails(setDoc(doc(a,countPath),{uid:"a"},{merge:true}));
+ await assertFails(setDoc(doc(a,"section_counts/2000-01-01"),{home:1}));
+ await env.withSecurityRulesDisabled(async ctx=>{
+   const snap=await getDoc(doc(ctx.firestore(),countPath));
+   assert.deepEqual(snap.data(),{home:1,globe:2,library:1});
+ });
+ console.log("PASS private aggregate counters: increment only, no client reads");
  console.log("PASS Firestore emulator: ownership, globe sync, encouragement, invitation and inbox access");
 } finally {await env.cleanup()}

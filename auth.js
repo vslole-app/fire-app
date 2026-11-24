@@ -1,4 +1,5 @@
 // Вход через Google (Firebase Authentication), прогресс и друзья (Cloud Firestore).
+import { createSectionCounts } from "./src/section-counts.js?v=1";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
 import { createFriendActions } from "./src/friend-actions.js?v=refactor11";
@@ -52,6 +53,10 @@ async function main() {
   const auth = A.getAuth(app);
   auth.languageCode = "ru";
   const db = F.getFirestore(app);
+  const sectionCounts = createSectionCounts({
+    write: (day, section) => F.setDoc(F.doc(db, "section_counts", day), { [section]: F.increment(1) }, { merge: true })
+  });
+  window.addEventListener("vslove:section-page", e => sectionCounts.page(e.detail));
   const provider = new A.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
@@ -936,6 +941,7 @@ async function main() {
         return !globeHide;
       }
     });
+    sectionCounts.globe();
     // The previous getDocs call returned a one-time snapshot; live updates
     // now arrive while the globe is open, including on other people's phones.
     const q = F.query(F.collection(db, "globe"), F.limit(1000));
@@ -1516,6 +1522,7 @@ async function main() {
     try { publishSummary(); } catch (e) {}
   };
   A.onAuthStateChanged(auth, async (user) => {
+    sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
     Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = []; knownReq = null;
     if (myUnsub) { myUnsub(); myUnsub = null; }
     if (inboxUnsub) { inboxUnsub(); inboxUnsub = null; } cheerQueue = []; seenCheers.clear();

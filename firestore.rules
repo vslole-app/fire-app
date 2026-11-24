@@ -1,6 +1,26 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Daily totals, no account IDs or visit records. Clients cannot read/delete.
+    match /section_counts/{day} {
+      function pad(n) { return (n < 10 ? '0' : '') + string(n); }
+      function todayUtc() {
+        return string(request.time.year()) + '-' + pad(request.time.month()) + '-' + pad(request.time.day());
+      }
+      function validDay() { return request.auth != null && day == todayUtc(); }
+      function bump(k) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([k])
+          && request.resource.data.get(k, 0) is int
+          && request.resource.data.get(k, 0) == resource.data.get(k, 0) + 1;
+      }
+      allow read, delete: if false;
+      allow create: if validDay() && (request.resource.data == {'home': 1}
+        || request.resource.data == {'globe': 1} || request.resource.data == {'library': 1});
+      allow update: if validDay()
+        && request.resource.data.keys().hasOnly(['home', 'globe', 'library'])
+        && (bump('home') || bump('globe') || bump('library'));
+    }
+
 
     // личный прогресс: только сам пользователь
     match /users/{uid} {

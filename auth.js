@@ -7,7 +7,7 @@ import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
 import { fKeys,fLabel,fShort,fDone,fRef,fUrl,fLit,fGlobeReadToday,fProfileReadToday,fScheduleReadToday,fLiveAhead } from "./src/friend-progress.js?v=live-pace-1";
 
-import { createGlobeAnalytics } from "./src/globe-analytics.js?v=1";
+import { createGlobeAnalytics } from "./src/globe-analytics.js?v=2";
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 const $ = (id) => document.getElementById(id);
@@ -1375,13 +1375,13 @@ async function main() {
     });
     m.append(who, about, bell, archive, awards);
     if (globeAnalytics.available) {
-      const statistics = item("", "user", "Статистика посещений: " + (globeAnalytics.enabled() ? "вкл." : "выкл."));
+      const statistics = item("", "user", "Разрешение на аналитику: " + (globeAnalytics.enabled() ? "вкл." : "выкл."));
       statistics.addEventListener("click", () => {
         closeUserMenu();
         if (globeAnalytics.enabled()) {
           globeAnalytics.setConsent(false);
           O().toast("Сбор статистики отключён");
-        } else if (window.confirm("Разрешить Google Analytics собирать статистику посещений Глобуса? Google получит технический идентификатор браузера и данные об использовании приложения. Имена, аккаунты и сведения о прочитанных отрывках не передаются приложением. Согласие добровольное, его можно отозвать здесь в любое время.")) {
+        } else if (window.confirm("Разрешить Google Analytics собирать статистику посещений Глобуса в приложении для чтения Библии «В Слове»? Google получит технический идентификатор браузера, сведения о посещении сайта и использовании приложения, в том числе факт посещения Глобуса. Отчёты предназначены для владельца и уполномоченных разработчиков. Имена, ID аккаунтов и сведения о прочитанных отрывках приложение в аналитику не передаёт. Реклама не используется для этой аналитики. Согласие добровольное, отказ не ограничивает функции приложения; его можно отозвать здесь в любое время.")) {
           globeAnalytics.setConsent(true);
           O().toast("Сбор статистики разрешён");
         }

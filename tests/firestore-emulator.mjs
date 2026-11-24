@@ -81,6 +81,11 @@ try {
  await assertSucceeds(open(b,"globe"));
  await assertSucceeds(open(a,"globe"));
  await assertSucceeds(open(b,"library"));
+ await assertSucceeds(open(a,"path"));
+ await assertSucceeds(open(b,"schedule"));
+ await assertSucceeds(open(a,"friends"));
+ await assertFails(setDoc(doc(a,countPath),{path:increment(2)},{merge:true}));
+ await assertFails(setDoc(doc(a,countPath),{schedule:increment(1),friends:increment(1)},{merge:true}));
  await assertFails(open(env.unauthenticatedContext().firestore(),"home"));
  await assertFails(getDoc(doc(a,countPath)));
  await assertFails(getDocs(collection(b,"section_counts")));
@@ -91,7 +96,7 @@ try {
  await assertFails(setDoc(doc(a,"section_counts/2000-01-01"),{home:1}));
  await env.withSecurityRulesDisabled(async ctx=>{
    const snap=await getDoc(doc(ctx.firestore(),countPath));
-   assert.deepEqual(snap.data(),{home:1,globe:2,library:1});
+   assert.deepEqual(snap.data(),{home:1,globe:2,library:1,path:1,schedule:1,friends:1});
  });
  console.log("PASS private aggregate counters: increment only, no client reads");
  console.log("PASS Firestore emulator: ownership, globe sync, encouragement, invitation and inbox access");

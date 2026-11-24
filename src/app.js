@@ -2202,7 +2202,6 @@ function renderSchedList(){
     if(rows.length){
       const main=mainSchedule(rows), ordered=[main,...rows.filter(r=>r!==main)];
       L.append(el("div","slgrp","Читаю · "+rows.length));
-      L.append(el("p","hint","При параллельном чтении Библии и книг служения глобус показывает отрывки из Библии."));
       ordered.forEach((r,i)=>{
         const entry=card(r);
         const lb=el("div","schedno sllab"+(i===0?" main":""),i===0?"✓ Главное расписание":"Расписание "+(i+1));

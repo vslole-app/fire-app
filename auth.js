@@ -1,5 +1,5 @@
 // Вход через Google (Firebase Authentication), прогресс и друзья (Cloud Firestore).
-import { createSectionCounts } from "./src/section-counts.js?v=1";
+import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
 import { createFriendActions } from "./src/friend-actions.js?v=refactor11";
@@ -56,7 +56,15 @@ async function main() {
   const sectionCounts = createSectionCounts({
     write: (day, section) => F.setDoc(F.doc(db, "section_counts", day), { [section]: F.increment(1) }, { merge: true })
   });
-  window.addEventListener("vslove:section-page", e => sectionCounts.page(e.detail));
+  const refreshPathCount = watchPathCard({
+    counts: sectionCounts, card: $("pathCard"),
+    isSignedIn: () => !!auth.currentUser,
+    isGlobeOpen: () => !!window.OgonekGlobe?.isOpen()
+  });
+  window.addEventListener("vslove:section-page", e => {
+    sectionCounts.page(e.detail);
+    refreshPathCount();
+  });
   const provider = new A.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
@@ -942,6 +950,7 @@ async function main() {
       }
     });
     sectionCounts.globe();
+    refreshPathCount();
     // The previous getDocs call returned a one-time snapshot; live updates
     // now arrive while the globe is open, including on other people's phones.
     const q = F.query(F.collection(db, "globe"), F.limit(1000));
@@ -1523,6 +1532,7 @@ async function main() {
   };
   A.onAuthStateChanged(auth, async (user) => {
     sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
+    refreshPathCount();
     Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = []; knownReq = null;
     if (myUnsub) { myUnsub(); myUnsub = null; }
     if (inboxUnsub) { inboxUnsub(); inboxUnsub = null; } cheerQueue = []; seenCheers.clear();

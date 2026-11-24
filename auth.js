@@ -7,6 +7,8 @@ import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
 import { fKeys,fLabel,fShort,fDone,fRef,fUrl,fLit,fGlobeReadToday,fProfileReadToday,fScheduleReadToday,fLiveAhead } from "./src/friend-progress.js?v=live-pace-1";
 
+import { createGlobeAnalytics } from "./src/globe-analytics.js?v=1";
+
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 const $ = (id) => document.getElementById(id);
 const OWNER_KEY = "ogonek-owner";
@@ -49,6 +51,8 @@ async function main() {
   ]);
   try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) {}
   const app = initializeApp(firebaseConfig);
+  const globeAnalytics = createGlobeAnalytics({ app, sdk: SDK, measurementId: firebaseConfig.measurementId });
+  window.addEventListener("vslove:readers-globe-open", () => globeAnalytics.recordOpen());
   const auth = A.getAuth(app);
   auth.languageCode = "ru";
   const db = F.getFirestore(app);
@@ -1369,7 +1373,22 @@ async function main() {
       out.dataset.armed = "1"; outT.textContent = "Нажмите ещё раз, чтобы выйти";
       setTimeout(() => { delete out.dataset.armed; outT.textContent = "Выйти"; }, 3000);
     });
-    m.append(who, about, bell, archive, awards, out);
+    m.append(who, about, bell, archive, awards);
+    if (globeAnalytics.available) {
+      const statistics = item("", "user", "Статистика посещений: " + (globeAnalytics.enabled() ? "вкл." : "выкл."));
+      statistics.addEventListener("click", () => {
+        closeUserMenu();
+        if (globeAnalytics.enabled()) {
+          globeAnalytics.setConsent(false);
+          O().toast("Сбор статистики отключён");
+        } else if (window.confirm("Разрешить Google Analytics собирать статистику посещений Глобуса? Google получит технический идентификатор браузера и данные об использовании приложения. Имена, аккаунты и сведения о прочитанных отрывках не передаются приложением. Согласие добровольное, его можно отозвать здесь в любое время.")) {
+          globeAnalytics.setConsent(true);
+          O().toast("Сбор статистики разрешён");
+        }
+      });
+      m.append(statistics);
+    }
+    m.append(out);
     const r = top.getBoundingClientRect();
     m.style.top = (r.bottom + window.scrollY + 6) + "px";
     m.style.right = Math.max(8, document.documentElement.clientWidth - r.right) + "px";

@@ -3486,8 +3486,9 @@ function pathCenterMe(smooth){const pb=$("pathBox");if(!pb||!pb.offsetParent)ret
   pb.scrollTo({top:Math.max(0,y-pb.clientHeight/2),left:Math.max(0,x-pb.clientWidth/2),behavior:smooth?"smooth":"auto"})}
 function pathFocusSoon(){const pb=$("pathBox");if(pb){delete pb.dataset.touched;delete pb.dataset.ctouched}
   requestAnimationFrame(()=>requestAnimationFrame(()=>pathCenterMe(false)));setTimeout(()=>pathCenterMe(false),250)}
-function setPage(p){if(p==="plan")schedView="";
+function setPage(p){const previous=curPage;if(p==="plan")schedView="";
   curPage=p;try{sessionStorage.setItem("ogonek-page",p)}catch(e){}applyPage();window.scrollTo({top:0});if(p==="home")pathFocusSoon();
+  if(previous!==curPage)window.dispatchEvent(new CustomEvent("vslove:section-page",{detail:curPage}));
 }
 
 /* ---------- настройки уведомлений: напоминания (если огонёк ещё не горит) и уведомления от друзей ----------

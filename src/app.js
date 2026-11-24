@@ -3629,7 +3629,7 @@ function applyPage(){
     fe.querySelector("p").textContent=can?"Войдите через Google (кнопка вверху), чтобы добавлять друзей, видеть их на пути и воодушевлять друг друга.":"Друзья доступны в приложении «В Слове» после входа через Google."}
   try{renderConfFriendsCard()}catch(e){console.warn(e)}
   const nav=$("botNav");if(!nav)return;nav.textContent="";
-  list.forEach(([p,icon,label,short])=>{const b=el("button","bn"+(p===curPage?" on":""));b.type="button";b.setAttribute("aria-label",label);if(p===curPage)b.setAttribute("aria-current","page");
+  list.forEach(([p,icon,label,short])=>{const b=el("button","bn");b.type="button";b.dataset.navPage=p;b.setAttribute("aria-label",label);
     const ii=icoEl(icon);ii.classList.add("bni");b.append(ii,el("span","bnl",short||label));
     b.addEventListener("click",()=>{const G=window.OgonekGlobe;if(G&&G.isOpen&&G.isOpen())G.close();setPage(p)});nav.append(b);
     // глобус читателей — в центре нижней панели, открывается поверх любой страницы
@@ -3859,12 +3859,25 @@ function noteBadge(g,pp,x,y){
 }
 
 // пока открыт глобус: нижняя панель видна, кнопка-глобус подсвечена, остальные — нет
+function syncGlobeNav(){
+  const open=!!document.querySelector(".gmodal");
+  document.body.classList.toggle("globe-open",open);
+  const nav=$("botNav");
+  if(!nav)return;
+  document.documentElement.style.setProperty("--navh",nav.offsetHeight+"px");
+  nav.querySelectorAll(".bn").forEach(button=>{
+    const active=open?button.classList.contains("bnglobe"):button.dataset.navPage===curPage;
+    button.classList.toggle("on",active);
+    if(active)button.setAttribute("aria-current","page");
+    else button.removeAttribute("aria-current");
+  });
+}
 function globeWatch(){
-  if(globeWatch.done)return;globeWatch.done=true;
-  const upd=()=>{const open=!!document.querySelector(".gmodal");document.body.classList.toggle("globe-open",open);
-    const nav=$("botNav");if(!nav)return;document.documentElement.style.setProperty("--navh",nav.offsetHeight+"px");
-    nav.querySelectorAll(".bn").forEach(b=>{const g=b.classList.contains("bnglobe");b.classList.toggle("on",open?g:(!g&&b.getAttribute("aria-label")===((PAGES_SPB.find(x=>x[0]===curPage)||[])[2])))})};
-  new MutationObserver(upd).observe(document.body,{childList:true});upd();
+  if(!globeWatch.done){
+    globeWatch.done=true;
+    new MutationObserver(syncGlobeNav).observe(document.body,{childList:true});
+  }
+  syncGlobeNav();
 }
 /* ---------- книга дочитана: праздник с открывающейся книгой и полкой ---------- */
 function bkSnap(){const s=new Set();try{booksFinished().forEach(x=>s.add(x.a+"@"+x.d+"@"+x.plan))}catch(e){}try{msShelf().forEach(o=>{if(o.full)s.add("ms@"+o.id)})}catch(e){}return s}

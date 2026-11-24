@@ -15,10 +15,13 @@ service cloud.firestore {
       }
       allow read, delete: if false;
       allow create: if validDay() && (request.resource.data == {'home': 1}
-        || request.resource.data == {'globe': 1} || request.resource.data == {'library': 1});
+        || request.resource.data == {'globe': 1} || request.resource.data == {'library': 1}
+        || request.resource.data == {'path': 1} || request.resource.data == {'schedule': 1}
+        || request.resource.data == {'friends': 1});
       allow update: if validDay()
-        && request.resource.data.keys().hasOnly(['home', 'globe', 'library'])
-        && (bump('home') || bump('globe') || bump('library'));
+        && request.resource.data.keys().hasOnly(['home', 'globe', 'library', 'path', 'schedule', 'friends'])
+        && (bump('home') || bump('globe') || bump('library')
+          || bump('path') || bump('schedule') || bump('friends'));
     }
 
 

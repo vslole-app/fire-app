@@ -666,17 +666,10 @@
     const hasDetail = detail?.classList.contains("reading-book-detail");
     let selected = null;
     const canvas = document.createElement("canvas");
-    canvas.setAttribute("aria-label", "Вращающийся глобус книг с последовательностью прочтения");
+    canvas.setAttribute("aria-label", "Карта маршрута чтения");
     canvas.setAttribute("role", "img");
     canvas.tabIndex = 0;
-    const flameLayer = document.createElement("canvas");
-    flameLayer.setAttribute("aria-hidden", "true");
-    Object.assign(flameLayer.style, {position:"absolute", inset:"0", pointerEvents:"none"});
-    const starLayer = document.createElement("canvas");
-    starLayer.setAttribute("aria-hidden", "true");
-    Object.assign(starLayer.style, {position:"absolute", inset:"0", pointerEvents:"none"});
-    canvas.style.position = "relative";
-    stage.append(starLayer, canvas, flameLayer);
+    stage.append(canvas);
     const controls = el("div", "reading-globe-controls");
     const control = (t, label, fn) => {
       const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-label", label);
@@ -686,92 +679,51 @@
     const latestReading = trails.map(trail => trail.at(-1)).filter(Boolean)
       .sort((a, b) => b.date - a.date)[0];
     const focus = last?.v || latestReading?.v || books[0].c;
-    let yaw = -Math.atan2(focus[0], focus[2]), pitch = Math.asin(focus[1]) * 0.6;
+    let yaw = -Math.atan2(focus[0], focus[2]), pitch = Math.asin(focus[1]);
     const initialYaw = yaw, initialPitch = pitch;
     let zoom = 1, sizeW = 0, sizeH = 0, dpr = 1, alive = true;
     const maxZoom = 5, hit = [], landHits = [];
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    const rotBook = v => {
-      const a = Math.cos(yaw), b = Math.sin(yaw), c = Math.cos(pitch), d = Math.sin(pitch);
-      const x = v[0] * a + v[2] * b, z = -v[0] * b + v[2] * a;
-      return [x, v[1] * c - z * d, v[1] * d + z * c];
-    };
-    const drawRing = (path, vs, cx, cy, R) => {
-      const pp = vs.map(rotBook);
-      if (!pp.some(v => v[2] > 0)) return false;
-      pp.forEach((v, i) => {
-        let x = v[0], y = v[1];
-        if (v[2] < 0) { const z = Math.hypot(x, y) || 1; x /= z; y /= z; }
-        const X = cx + x * R, Y = cy - y * R;
-        if (i) path.lineTo(X, Y); else path.moveTo(X, Y);
-      });
-      path.closePath(); return true;
-    };
+    const wrap = angle => ((angle + Math.PI) % TAU + TAU) % TAU - Math.PI;
     const canvasContext = canvas.getContext("2d");
-    const flameContext = flameLayer.getContext("2d");
-    const starContext = starLayer.getContext("2d");
-    if (!canvasContext || !flameContext || !starContext) return () => {};
-    const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    let flameFrame = 0, inView = !window.IntersectionObserver;
-    const paintAnimation = timestamp => {
-      const time = motion?.matches ? 0 : timestamp / 1000;
-      starContext.setTransform(dpr,0,0,dpr,0,0);
-      starContext.clearRect(0,0,sizeW,sizeH);
-      drawStars(starContext,sizeW,sizeH,yaw,pitch,time);
-      flameContext.setTransform(dpr,0,0,dpr,0,0);
-      flameContext.clearRect(0,0,sizeW,sizeH);
-      for (const marker of hit) {
-        if (!marker.scale) continue;
-        if (marker.e === selected) {
-          window.OgonekProgressVisual.flame(flameContext, marker.x, marker.y, marker.scale, 1);
-        } else {
-          drawReaderFlame(flameContext, marker.x, marker.y, marker.scale,
-            time, marker.phase);
-        }
-      }
-    };
-    const animate = timestamp => {
-      flameFrame = 0;
-      if (!alive || !host.isConnected || !inView || motion?.matches) return;
-      paintAnimation(timestamp);
-      flameFrame = requestAnimationFrame(animate);
-    };
-    const updateAnimation = () => {
-      if (!inView || motion?.matches) {
-        cancelAnimationFrame(flameFrame);
-        flameFrame = 0;
-        if (inView && alive) paintAnimation(performance.now());
-      } else if (!flameFrame) {
-        flameFrame = requestAnimationFrame(animate);
-      }
-    };
+    if (!canvasContext) return () => {};
     const draw = () => {
       if (!alive || !host.isConnected) return;
       const ctx = canvasContext, W = sizeW || 360, H = sizeH || 360;
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.clearRect(0,0,W,H);
       landHits.length = 0;
-      const R = Math.min(W * 0.475, H * 0.475) * zoom, cx = W / 2, cy = H / 2;
-      let g = ctx.createRadialGradient(cx,cy,R*0.8,cx,cy,R*1.22);
-      g.addColorStop(0,"rgba(75,159,255,.5)");g.addColorStop(1,"rgba(75,159,255,0)");
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.22,0,TAU);ctx.fill();
-      g=ctx.createRadialGradient(cx-R*0.45,cy-R*0.5,R*0.07,cx,cy,R);
-      g.addColorStop(0,"#478fe2");g.addColorStop(.6,"#18519c");g.addColorStop(1,"#081834");
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.fill();
-      ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.clip();
+      const scale = W / 2.6 * zoom, cx = W / 2, cy = H / 2;
+      const project = v => [
+        cx + wrap(Math.atan2(v[0],v[2]) + yaw) * scale,
+        cy - (Math.asin(clamp(v[1],-1,1)) - pitch) * scale
+      ];
+      const worldWidth = TAU * scale;
+      const addPath = (path, points, closed=false) => {
+        const projected = points.map(project);
+        for (let i=1;i<projected.length;i++) {
+          const last=projected[i-1][0];
+          projected[i][0]-=Math.round((projected[i][0]-last)/worldWidth)*worldWidth;
+        }
+        for (const offset of [-worldWidth,0,worldWidth]) {
+          projected.forEach(([x,y],i)=>i?path.lineTo(x+offset,y):path.moveTo(x+offset,y));
+          if(closed)path.closePath();
+        }
+      };
+      const water=ctx.createRadialGradient(W*.42,H*.42,0,cx,cy,Math.max(W,H)*.8);
+      water.addColorStop(0,"#2d6fbd");water.addColorStop(.62,"#16417e");water.addColorStop(1,"#0b2047");
+      ctx.fillStyle=water;ctx.fillRect(0,0,W,H);
       ctx.lineJoin="round";
       CONT.forEach(cont => {
         const land=new Path2D();
-        let visible=false;
-        cont.vs.forEach(vs=>{if(drawRing(land,vs,cx,cy,R))visible=true});
-        if(!visible)return;
+        cont.vs.forEach(vs=>addPath(land,vs,true));
         ctx.save();ctx.clip(land);
         cont.bk.forEach(book=>{
           if(!book.poly.length)return;
           const landBook=new Path2D();
-          if(!drawRing(landBook,book.poly,cx,cy,R))return;
+          addPath(landBook,book.poly,true);
           landHits.push({book, area:landBook, coast:land});
-          const k=rotBook(book.c),light=.55+.45*Math.max(0,dot(k,L));
+          const light=.78+.22*Math.max(0,dot(book.c,L));
           ctx.fillStyle="rgb("+book.col.map(v=>Math.round(v*light)).join(",")+")";
           const chosen = selected?.kind === "bible" && selected.v === book.c;
           if (chosen) ctx.fillStyle = "#ffd276";
@@ -781,65 +733,44 @@
           ctx.stroke(landBook);
         });
         ctx.restore();
+        ctx.lineWidth=1.25;ctx.strokeStyle="rgba(254,234,190,.65)";
+        ctx.stroke(land);
       });
-      ctx.lineWidth=1.25;ctx.strokeStyle="rgba(254,234,190,.65)";
-      CONT.forEach(cont=>cont.vs.forEach(vs=>{
-        const pp=vs.map(rotBook);ctx.beginPath();
-        pp.forEach((v,i)=>{
-          const v2=pp[(i+1)%pp.length];
-          if(v[2]>.01&&v2[2]>.01){
-            ctx.moveTo(cx+v[0]*R,cy-v[1]*R);ctx.lineTo(cx+v2[0]*R,cy-v2[1]*R);
-          }
-        });ctx.stroke();
-      }));
-      ctx.restore();
-      ctx.strokeStyle="rgba(142,196,255,.65)";ctx.lineWidth=1.3;
-      ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.stroke();
-      // Маршрут поверх карты; дальняя сторона скрыта земным шаром.
+      // Пройденный путь рисуется поверх участков карты.
       hit.length=0;
       trails.forEach((trail, testament) => {
         ctx.save();
         ctx.strokeStyle = testament === 0 ? "#ffda8b" : "#a4edff";
-        ctx.lineWidth = 1.15;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        const line = new Path2D();
         for (let i = 1; i < trail.length; i++) {
           const a = trail[i - 1], b = trail[i];
           if (a.n === b.n) continue;
-          let opened = false;
-          for (let k = 0; k <= 32; k++) {
-            const p = rotBook(routePosition(a.v, b.v, k / 32));
-            if (p[2] > .012) {
-              const x = cx + p[0] * R, y = cy - p[1] * R;
-              if (opened) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-              opened = true;
-            } else opened = false;
-          }
+          addPath(line, Array.from({length: 25}, (_,k) => routePosition(a.v,b.v,k/24)));
         }
-        ctx.stroke();
+        ctx.shadowColor = ctx.strokeStyle;ctx.shadowBlur = 7;
+        ctx.stroke(line);
         ctx.restore();
       });
       const occupied = [[W - 48, 5, W, 138]];
       const markers = [...entries].sort((a, b) => Number(b.kind === "bible") - Number(a.kind === "bible"));
-      markers.forEach((e,index)=>{
-        const p=rotBook(e.v);
-        if(p[2]<.03)return;
-        const x=cx+p[0]*R,y=cy-p[1]*R;
-        const scale=e.kind==="bible"?readerFlameScale(p[2],zoom):0;
-        if(scale){
-          const half=6*scale+2;
-          occupied.push([x-half,y-17*scale-2,x+half,y+2*scale+2]);
-        }else{
-          ctx.fillStyle="#cfb4ff";ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fill();
-          occupied.push([x-4,y-4,x+4,y+4]);
-        }
-        hit.push({x,y,e,scale,phase:index*2.4});
+      markers.forEach(e=>{
+        const [x,y]=project(e.v);
+        if(x<0||x>W||y<0||y>H)return;
+        const color=e.kind==="bible"?"#ffca65":"#cfb4ff";
+        const radius=e===selected?6:4;
+        ctx.save();ctx.shadowColor=color;ctx.shadowBlur=10;
+        ctx.fillStyle=color;ctx.strokeStyle="#fff4d9";ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.arc(x,y,radius,0,TAU);ctx.fill();ctx.stroke();ctx.restore();
+        occupied.push([x-8,y-8,x+8,y+8]);
+        hit.push({x,y,e});
       });
 
       // Подписи подбирают свободное место вокруг отметок.
-      if(zoom >= .9){
+      if(zoom >= .65){
         const markedBooks = new Set(entries.filter(e=>e.kind==="bible").map(e=>e.v));
-        const visibleBooks = books.map(b => ({b,p:rotBook(b.c)})).filter(o=>o.p[2]>.52)
+        const visibleBooks = books.map(b => ({b,p:project(b.c)}))
           .sort((a,b)=>Number(markedBooks.has(b.b.c))-Number(markedBooks.has(a.b.c))||b.b.cells.length-a.b.cells.length);
         const font=zoom>2?13:11;
         ctx.font="650 "+font+"px system-ui,sans-serif";
@@ -847,7 +778,7 @@
         ctx.lineJoin="round";ctx.lineWidth=2.7;
         ctx.strokeStyle="rgba(4,10,27,.8)";ctx.fillStyle="#f3f6ff";
         for(const {b,p} of visibleBooks){
-          const x=cx+p[0]*R,y=cy-p[1]*R;
+          const [x,y]=p;
           const width=ctx.measureText(b.name).width+6,half=width/2;
           if(x<0||x>W||y<0||y>H||width>W-8)continue;
           const centered=clamp(x,half+4,W-half-4);
@@ -864,8 +795,6 @@
           }
         }
       }
-      paintAnimation(performance.now());
-      updateAnimation();
     };
     const resize=()=>{
       if(!alive||!host.isConnected)return;
@@ -878,13 +807,9 @@
       dpr=Math.min(2,window.devicePixelRatio||1);
       canvas.width=Math.round(sizeW*dpr);canvas.height=Math.round(sizeH*dpr);
       canvas.style.width=sizeW+"px";canvas.style.height=sizeH+"px";
-      for (const layer of [flameLayer,starLayer]) {
-        layer.width=canvas.width;layer.height=canvas.height;
-        layer.style.width=canvas.style.width;layer.style.height=canvas.style.height;
-      }
       draw();
     };
-    const zoomTo=v=>{zoom=clamp(v,.8,maxZoom);draw()};
+    const zoomTo=v=>{zoom=clamp(v,.43,maxZoom);draw()};
     control("+","Приблизить маршрут",()=>zoomTo(zoom*1.4));
     control("−","Отдалить маршрут",()=>zoomTo(zoom/1.4));
     control("⌖","Вернуть к последней книге",()=>{
@@ -906,8 +831,8 @@
       const dx=ev.clientX-p.x,dy=ev.clientY-p.y;
       pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
       lastMove+=Math.abs(dx)+Math.abs(dy);
-      if(pointers.size>=2&&initialPinch>1){zoom=clamp(initialZoom*dist()/initialPinch,.8,maxZoom);}
-      else if(pointers.size===1){yaw+=dx*.007/Math.sqrt(zoom);pitch=clamp(pitch+dy*.007/Math.sqrt(zoom),-1.4,1.4);}
+      if(pointers.size>=2&&initialPinch>1){zoom=clamp(initialZoom*dist()/initialPinch,.43,maxZoom);}
+      else if(pointers.size===1){const pixelsPerRadian=sizeW/2.6*zoom;yaw=wrap(yaw+dx/pixelsPerRadian);pitch=clamp(pitch+dy/pixelsPerRadian,-Math.PI/2,Math.PI/2);}
       draw();
     });
     const end=ev=>{
@@ -952,18 +877,9 @@
     host.append(stage);
     const observer=window.ResizeObserver?new ResizeObserver(resize):null;
     if(observer)observer.observe(stage);else window.addEventListener("resize",resize);
-    const visibility=window.IntersectionObserver?new IntersectionObserver(([entry])=>{
-      inView=entry.isIntersecting;
-      updateAnimation();
-    }):null;
-    visibility?.observe(stage);
-    motion?.addEventListener?.("change",updateAnimation);
     requestAnimationFrame(resize);
     return ()=>{
       alive=false;if(observer)observer.disconnect();else window.removeEventListener("resize",resize);
-      visibility?.disconnect();
-      motion?.removeEventListener?.("change",updateAnimation);
-      cancelAnimationFrame(flameFrame);
       stage.remove();
     };
   }

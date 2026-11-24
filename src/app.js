@@ -1570,7 +1570,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const bookDetail=el("div","reading-book-detail");
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
   const explain=el("p","reading-globe-hint",
-    "Нажмите на участок прочитанной книги или отметку, чтобы увидеть дату.");
+    "Перемещайте карту. Нажмите на отметку или участок прочитанной книги, чтобы увидеть дату.");
   const globePanel=el("div","reading-globe-panel");
   globePanel.append(globeHost,bookDetail);
   sheet.append(heading,globePanel,explain);

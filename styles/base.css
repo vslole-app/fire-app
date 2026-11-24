@@ -1250,7 +1250,7 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .reading-book-detail b{font-size:1rem}
 .reading-book-detail span{font-size:.85rem;color:#c6d5f6}
 .reading-globe-panel{position:relative;min-width:0}
-.reading-globe-panel .reading-globe-stage{height:clamp(360px,78vh,780px);height:clamp(360px,78svh,780px);border-radius:16px;background:radial-gradient(circle at 12% 18%,rgba(120,70,210,.20),transparent 55%),radial-gradient(circle at 92% 88%,rgba(255,110,60,.10),transparent 60%),#05071a}
+.reading-globe-panel .reading-globe-stage{height:clamp(360px,64vh,620px);height:clamp(360px,64svh,620px);border:1px solid #415782;box-sizing:border-box;border-radius:16px;background:#0b2047}
 .reading-globe-panel>.reading-book-detail{position:absolute;top:10px;left:10px;right:54px;max-height:40%;overflow:auto;z-index:1}
 .reading-globe-hint{margin:-5px 0 3px;font-size:.77rem;line-height:1.4;color:var(--muted);text-align:center}
 .awards-sheet .badges{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:12px}

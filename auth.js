@@ -568,12 +568,30 @@ async function main() {
     return av;
   }
   const profileNavigation = createProfileNavigation();
+  let coveredDirectory = null;
+  function coverDirectory() {
+    const modal = document.querySelector(".fall");
+    if (!allOpen || !modal) return;
+    if (coveredDirectory && coveredDirectory.modal === modal) return;
+    const sheet = modal.querySelector(".fsheet");
+    coveredDirectory = {modal, sheet, scrollTop:sheet ? sheet.scrollTop : 0};
+    modal.classList.add("directory-covered");
+    modal.setAttribute("aria-hidden","true"); modal.inert = true;
+  }
+  function uncoverDirectory() {
+    const saved = coveredDirectory; coveredDirectory = null;
+    if (!saved || !saved.modal.isConnected) return;
+    saved.modal.classList.remove("directory-covered");
+    saved.modal.removeAttribute("aria-hidden"); saved.modal.inert = false;
+    if (saved.sheet) saved.sheet.scrollTop = saved.scrollTop;
+  }
   function closeProfile() {
     profileNavigation.cancel();
     const m = document.querySelector(".fmodal:not(.fall)");
     if (m) m.remove();
     activeProfileId = null;
     document.removeEventListener("keydown", escClose);
+    uncoverDirectory();
   }
   function escClose(e) { if (e.key === "Escape") closeProfile(); }
 
@@ -600,7 +618,8 @@ async function main() {
         document.body.append(loadingModal);
         document.addEventListener("keydown",escClose);
       }
-      if(allOpen) closeAll();
+      // Keep the original directory, its tab, search and scroll position.
+      if(allOpen) coverDirectory();
     } else if (activeProfileId !== id && !isMe) return;
     const token = profileNavigation.begin();
     const current = () => !!me && me.uid===viewerUid && profileNavigation.current(token);
@@ -1047,8 +1066,8 @@ async function main() {
     document.addEventListener("keydown", escAll);
     modal.append(sheet); document.body.append(modal); drawAll();
   }
-  function closeAll() { allOpen = false; stopReaders(); const m = document.querySelector(".fall"); if (m) m.remove(); document.removeEventListener("keydown", escAll); }
-  function escAll(e) { if (e.key === "Escape") closeAll(); }
+  function closeAll() { allOpen = false; coveredDirectory = null; stopReaders(); const m = document.querySelector(".fall"); if (m) m.remove(); document.removeEventListener("keydown", escAll); }
+  function escAll(e) { if (e.key === "Escape" && !coveredDirectory && !document.querySelector(".fmodal:not(.fall)")) closeAll(); }
   function drawAll() {
     const sheet = document.querySelector(".fall .fsheet"); if (!sheet) { allOpen = false; return; }
     if (sheet.dataset.tab === allTab && sheet.querySelector(".fallTop")) {
@@ -1192,7 +1211,7 @@ async function main() {
     // A live flame might arrive before Firestore updates a friend's profile.
     // Keep an open profile in sync with the globe's authoritative day marker.
     if (activeProfileId && activeProfileId !== me.uid) {
-      const shown = document.querySelector(".fmodal");
+      const shown = document.querySelector(".profile-view");
       const person = friendData[activeProfileId];
       if (shown && person && shown.dataset.readToday !== String(profileReadToday(person, activeProfileId, O().today()))) {
         openProfile(activeProfileId, false, true);
@@ -1838,7 +1857,7 @@ async function main() {
   A.onAuthStateChanged(auth, async (user) => {
     sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
     refreshPathCount();
-    friendUpdates.clear(); closeAll(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
+    friendUpdates.clear(); closeAll(); closeProfile(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
     friendsLoaded = false; lastPathPeople = ""; lastFof = ""; friendPreviews = Object.create(null); friendUnavailable.clear();
     clearTimeout(friendLoadTimer); friendLoadExpired = false; friendOrder = []; ownProgressSettled = false;
     requestCardsReady.clear(); requestCardsWaiting.clear();

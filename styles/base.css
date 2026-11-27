@@ -1348,3 +1348,6 @@ body.globe-open .fmodal .fsheet.lib-compact{
 .profile-opening .fsheet,.profile-view .fsheet{animation:none}
 .profile-opening .fsheet{min-height: min(260px, 60dvh)}
 .profile-opening .fhead h2{min-width:0;overflow-wrap:anywhere;flex:1}
+
+/* Preserve the reader directory behind an opened profile without a second backdrop. */
+.fall.directory-covered{visibility:hidden!important;pointer-events:none!important}

@@ -52,6 +52,14 @@ class RemindersTest(unittest.TestCase):
                     (False, self.day, False, 0, 14),
                 )
 
+    def test_canceled_reading_is_eligible_on_next_run(self):
+        today = self.day.isoformat()
+        self.assertFalse(self.decide(6, {"ntLast": today}, hours=[9, 22])[0])
+        self.assertEqual(
+            self.decide(7, {"ntLast": "", "otLast": ""}, hours=[9, 22]),
+            (True, self.day, False, 0, 9),
+        )
+
     def test_yesterday_reading_marks_streak_at_risk(self):
         self.assertEqual(
             self.decide(19, {"ntLast": "2026-09-28", "streak": 4}),

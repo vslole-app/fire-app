@@ -2,7 +2,7 @@
 
 Часы напоминаний человек выбирает сам в приложении (меню имени → «Уведомления»): push/{uid}.hours,
 например [11, 14, 22]. Если hours нет (старые подписки) — по умолчанию 14:00 и 22:00.
-Запускается каждый час из GitHub Actions (.github/workflows/remind.yml).
+Запускается каждые 15 минут из GitHub Actions (.github/workflows/remind.yml).
 Берёт подписки из Firestore (коллекция push/{uid}: tokens, tz, on, hours, lastSlot, lastSent),
 смотрит прогресс в profiles/{uid} (ntLast, otLast, streak, friends) и шлёт push через Firebase Cloud Messaging.
 Нужен секрет репозитория FIREBASE_SERVICE_ACCOUNT — JSON ключа сервисного аккаунта Firebase.
@@ -161,6 +161,7 @@ def main():
             refs = tuple(own) if own else (todays_refs(plan, day) if (profile.get("plan") or "spb") == "spb" else None)
             title, body = pick_message(at_risk, streak, refs, friends_read, hour=slot if slot is not None else HOUR)
         dead = []
+        delivered = False
         for tok in push.get("tokens", []):
             msg = messaging.Message(
                 token=tok,
@@ -170,11 +171,12 @@ def main():
             try:
                 messaging.send(msg)
                 sent += 1
+                delivered = True
             except (messaging.UnregisteredError, messaging.SenderIdMismatchError):
                 dead.append(tok)
             except Exception as e:  # noqa: BLE001
                 print("ошибка отправки", uid, type(e).__name__, e)
-        patch = {} if force else {"lastSent": day.isoformat(), "lastSlot": f"{day.isoformat()}@{slot}"}
+        patch = {"lastSent": day.isoformat(), "lastSlot": f"{day.isoformat()}@{slot}"} if delivered and not force else {}
         if dead:
             patch["tokens"] = firestore.ArrayRemove(dead)
         if patch:

@@ -1523,8 +1523,8 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const pick=(sp,html)=>{cab.querySelectorAll(".spine.on").forEach(q=>q.classList.remove("on"));sp.classList.add("on");info.innerHTML=html};
   const board=(plate,sub,row,cls)=>{const w=el("div","bboard"+(cls?" "+cls:""));const pl=el("div","bplank");pl.append(el("b",null,plate));if(sub)pl.append(el("span",null,sub));w.append(row,pl);cab.append(w)};
   [["ot","Ветхий Завет"],["nt","Новый Завет"]].forEach(([t,title])=>{
-    const L=BOOKS.filter(b=>b.t===t),row=el("div","shelfrow");
-    L.forEach(b=>{const r=read.get(b.a),sp=el("span","spine"+(r?"":" unread"));sp.style.height=Math.round((26+Math.sqrt(b.v.length)*4.2)*(mine||embedded?1:.60))+"px";if(r)sp.style.backgroundColor=SECCOL[b.s];
+    const L=BOOKS.filter(b=>b.t===t),row=el("div","shelfrow bible-shelfrow");
+    L.forEach(b=>{const r=read.get(b.a),sp=el("span","spine"+(r?"":" unread"));sp.style.height=Math.round((26+Math.sqrt(b.v.length)*4.2)*(mine||embedded?1:.80))+"px";if(r)sp.style.backgroundColor=SECCOL[b.s];
       sp.title=b.n;sp.tabIndex=0;
       const show=()=>pick(sp,"<b>"+b.n+"</b> · "+(r?"прочитана "+fmtLong(r[1])+(r[2]>1?" · "+r[2]+" "+plural(r[2],"раз","раза","раз"):""):"ещё не прочитана"));
       sp.addEventListener("click",show);sp.addEventListener("mouseenter",show);sp.addEventListener("focus",show);row.append(sp)});

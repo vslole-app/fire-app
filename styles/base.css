@@ -1272,3 +1272,41 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 @media(max-width:390px){
  .reading-globe-heading{align-items:flex-start;flex-direction:column;gap:4px}
 }
+
+/* Библиотека другого читателя: две полки и квадратная карта на одном экране. */
+.fsheet.lib-compact{
+  --library-available:92vh;
+  --library-available:92dvh;
+  box-sizing:border-box;
+  height:min(var(--library-available),740px);
+  max-height:var(--library-available);
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+  gap:7px;
+}
+body.globe-open .fmodal .fsheet.lib-compact{
+  --library-available:calc(100dvh - var(--navh,70px) - 32px);
+  max-height:var(--library-available);
+}
+.fsheet.lib-compact > :not(.reading-globe-panel){flex-shrink:0}
+.lib-compact .fhead{gap:8px;align-items:center}
+.lib-compact .fhead h2{margin:0;font-size:1.17rem;line-height:1.15}
+.lib-compact .fclose{width:32px;height:32px;align-self:center}
+.lib-compact .bcase{gap:5px;padding:5px 7px 4px;border-width:5px;border-bottom-width:6px;margin:0}
+.lib-compact .bcase .shelfrow{height:49px;padding:0 1px 2px;gap:1.5px}
+.lib-compact .bplank{padding:3px 6px 4px;gap:4px}
+.lib-compact .bplank b,.lib-compact .bplank span{font-size:.65rem;letter-spacing:.025em}
+.lib-compact .libinfo{margin:0;padding:0;min-height:0;font-size:.72rem;line-height:1.25}
+.lib-compact .reading-globe-heading{margin:0;gap:2px;flex-direction:row;align-items:baseline;flex-wrap:wrap}
+.lib-compact .reading-globe-heading h3{font-size:1.05rem;line-height:1.2}
+.lib-compact .reading-globe-heading span{font-size:.72rem;line-height:1.2}
+.lib-compact .reading-globe-hint{margin:0;font-size:.7rem;line-height:1.2}
+.lib-compact .reading-globe-panel{flex:1 1 0;min-height:150px;display:flex;align-items:center;justify-content:center}
+.lib-compact .reading-globe-host{display:flex;justify-content:center;align-items:center;height:100%;overflow:visible}
+.fsheet.lib-compact .reading-globe-panel .reading-globe-stage{width:min(100%,max(150px,calc(var(--library-available) - 285px)));flex:none;border-width:5px}
+.lib-compact .reading-globe-stage canvas{position:absolute;top:0;left:0}
+.lib-compact .reading-globe-controls{right:5px;top:5px;gap:5px}
+.lib-compact .reading-globe-controls button{width:31px;height:31px;font-size:1.05rem;border-radius:8px}
+@supports (width:1cqh){
+  .lib-compact .reading-globe-panel{container-type:size}
+  .fsheet.lib-compact .reading-globe-panel .reading-globe-stage{width:min(100%,100cqh)}
+}

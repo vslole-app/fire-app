@@ -1489,7 +1489,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   list=list.map(x=>Array.isArray(x)?x:[x&&x.a,x&&x.d,x&&x.n])
     .filter(x=>typeof x[0]==="string"&&x[0]);
   const read=new Map(list.map(x=>[x[0],x]));
-  const modal=embedded?null:el("div","fmodal"),sheet=el("section","fsheet bshelf lib"+(embedded?" lib-embedded":""));if(!embedded){sheet.setAttribute("role","dialog");sheet.setAttribute("aria-modal","true")}sheet.setAttribute("aria-label",mine?"Моя библиотека":"Библиотека");
+  const modal=embedded?null:el("div","fmodal"),sheet=el("section","fsheet bshelf lib"+(embedded?" lib-embedded":"")+(!mine&&!embedded?" lib-compact":""));if(!embedded){sheet.setAttribute("role","dialog");sheet.setAttribute("aria-modal","true")}sheet.setAttribute("aria-label",mine?"Моя библиотека":"Библиотека");
   const close=()=>{if(!modal)return;if(typeof globeCleanup==="function")globeCleanup();modal.remove();document.removeEventListener("keydown",esc)};const esc=e=>{if(e.key==="Escape")close()};
   if(modal){modal.addEventListener("click",e=>{if(e.target===modal)close()});document.addEventListener("keydown",esc)}
   const head=el("div","fhead"),h=el("h2",null,mine?"Моя библиотека":"Библиотека · "+(who||"друг"));const x=el("button","fclose","×");x.type="button";x.setAttribute("aria-label","Закрыть");x.addEventListener("click",close);head.append(h);if(!embedded)head.append(x);
@@ -1519,12 +1519,12 @@ function openBooks(list,who,ministryBooks,embedded=false){
       tile(nO,0,"Служение",reading?"Читаю "+reading:""));
   }
   // шкаф: сверху Библия, ниже Жизнеизучение, ниже остальные книги служения
-  const cab=el("div","bcase"),info=el("div","shelfinfo libinfo","Нажмите на корешок — покажу, что прочитано.");
+  const cab=el("div","bcase"),info=el("div","shelfinfo libinfo",mine?"Нажмите на корешок — покажу, что прочитано.":"Нажмите на корешок, чтобы узнать дату.");
   const pick=(sp,html)=>{cab.querySelectorAll(".spine.on").forEach(q=>q.classList.remove("on"));sp.classList.add("on");info.innerHTML=html};
   const board=(plate,sub,row,cls)=>{const w=el("div","bboard"+(cls?" "+cls:""));const pl=el("div","bplank");pl.append(el("b",null,plate));if(sub)pl.append(el("span",null,sub));w.append(row,pl);cab.append(w)};
   [["ot","Ветхий Завет"],["nt","Новый Завет"]].forEach(([t,title])=>{
     const L=BOOKS.filter(b=>b.t===t),row=el("div","shelfrow");
-    L.forEach(b=>{const r=read.get(b.a),sp=el("span","spine"+(r?"":" unread"));sp.style.height=Math.round(26+Math.sqrt(b.v.length)*4.2)+"px";if(r)sp.style.backgroundColor=SECCOL[b.s];
+    L.forEach(b=>{const r=read.get(b.a),sp=el("span","spine"+(r?"":" unread"));sp.style.height=Math.round((26+Math.sqrt(b.v.length)*4.2)*(mine||embedded?1:.60))+"px";if(r)sp.style.backgroundColor=SECCOL[b.s];
       sp.title=b.n;sp.tabIndex=0;
       const show=()=>pick(sp,"<b>"+b.n+"</b> · "+(r?"прочитана "+fmtLong(r[1])+(r[2]>1?" · "+r[2]+" "+plural(r[2],"раз","раза","раз"):""):"ещё не прочитана"));
       sp.addEventListener("click",show);sp.addEventListener("mouseenter",show);sp.addEventListener("focus",show);row.append(sp)});
@@ -1570,7 +1570,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
   const bookDetail=el("div","reading-book-detail");
   bookDetail.hidden=true;bookDetail.setAttribute("aria-live","polite");
   const explain=el("p","reading-globe-hint",
-    "Перемещайте карту. Нажмите на отметку или участок прочитанной книги, чтобы увидеть дату.");
+    mine?"Перемещайте карту. Нажмите на отметку или участок прочитанной книги, чтобы увидеть дату.":"Нажмите на книгу или отметку, чтобы увидеть дату.");
   const globePanel=el("div","reading-globe-panel");
   globePanel.append(globeHost,bookDetail);
   sheet.append(heading,globePanel,explain);

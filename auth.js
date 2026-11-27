@@ -90,10 +90,10 @@ async function main() {
   const serverVerifiedFriends = new Set();
   let friendsLoaded = false, lastPathPeople = "", friendPreviews = Object.create(null);
   const friendUnavailable = new Set();
-  let friendLoadExpired = false, friendLoadTimer = null, friendOrder = [];
+  let friendLoadExpired = false, friendLoadTimer = null, friendOrder = [], ownProgressSettled = false;
   const requestCardsWaiting = new Set();
   const requestCardsReady = new Set();
-  const friendPhase = () => friendListPhase(friendsLoaded, myFriends, serverVerifiedFriends, friendUnavailable, friendLoadExpired);
+  const friendPhase = () => !ownProgressSettled && !friendLoadExpired ? "loading" : friendListPhase(friendsLoaded, myFriends, serverVerifiedFriends, friendUnavailable, friendLoadExpired);
   const rowMarkup = new WeakMap();
   function syncStableRows(host, entries) {
     const old = new Map(Array.from(host.children).map(node=>[node.dataset.stableKey,node]));
@@ -839,9 +839,10 @@ async function main() {
   }
 
   let allOpen = false, allTab = "friends";
-  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "", readerHasCache = false, readerSignature = "";
+  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "", readerHasCache = false, readerSignature = "", readerLoadTimer = null;
   const stopReaders = (clear = false) => {
     if (readerUnsub) readerUnsub();
+    clearTimeout(readerLoadTimer); readerLoadTimer = null;
     readerUnsub = null;
     if (clear) { readerRows = []; readerHasCache = false; readerSignature = ""; }
     readerState = readerHasCache ? "cached" : "idle";
@@ -851,10 +852,12 @@ async function main() {
     readerState = readerHasCache ? "cached" : "loading";
     const uid = me.uid;
     const q = F.query(F.collection(db, "globe"), F.limit(1000));
+    readerLoadTimer = setTimeout(()=>{if(allOpen && me && me.uid===uid){readerState=readerHasCache?"offline":"error";updateReaderList();}},12000);
     readerUnsub = F.onSnapshot(q, {includeMetadataChanges:true}, snap => {
       if (!allOpen || !me || me.uid !== uid) return;
       // Do not replace a previously loaded list with an empty SDK cache.
       if (snap.metadata.fromCache) return; // initial reader list appears once the complete server snapshot arrives
+      clearTimeout(readerLoadTimer); readerLoadTimer = null;
       readerRows = snap.docs.map(doc => {
         const p = doc.data();
         return {uid:doc.id,name:String(p.name || "Читатель"),photo:p.photo || ""};
@@ -865,6 +868,7 @@ async function main() {
     }, e => {
       console.warn("Reader directory unavailable", e);
       if (!allOpen || !me || me.uid !== uid) return;
+      clearTimeout(readerLoadTimer); readerLoadTimer = null;
       readerState = readerHasCache ? "offline" : "error"; updateReaderList();
     });
   };
@@ -885,10 +889,9 @@ async function main() {
     list.dataset.signature = signature;
     const entries = [];
     if (readerState === "error") {
-      list.replaceChildren();
-      list.append(el("p","hint","Не удалось загрузить список. Проверьте интернет."));
       const retry=el("button","btn","Повторить");retry.type="button";
-      retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();});list.append(retry);return;
+      retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();});
+      syncStableRows(list,[["error",el("p","hint","Не удалось загрузить список. Проверьте интернет.")],["retry",retry]]);return;
     }
     if (!readerHasCache) { syncStableRows(list,[["loading",el("p","hint friends-loading","Загрузка читателей…")]]); return; }
     const normalize = s => String(s || "").toLocaleLowerCase("ru").replace(/ё/g,"е").trim();
@@ -1001,7 +1004,7 @@ async function main() {
     const sheet = document.querySelector(".fall .fsheet"); if (!sheet) { allOpen = false; return; }
     if (sheet.dataset.tab === allTab && sheet.querySelector(".fallTop")) {
       const tab = sheet.querySelector(".friend-count-tab");
-      if(tab) tab.textContent = "Друзья · " + myFriends.length;
+      if(tab && tab.textContent !== "Друзья · " + myFriends.length) tab.textContent = "Друзья · " + myFriends.length;
       if(allTab === "friends") renderFriendPanel(sheet.querySelector(".friends"),true);
       else updateReaderList();
       return;
@@ -1788,7 +1791,7 @@ async function main() {
     refreshPathCount();
     friendUpdates.clear(); closeAll(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
     friendsLoaded = false; lastPathPeople = ""; lastFof = ""; friendPreviews = Object.create(null); friendUnavailable.clear();
-    clearTimeout(friendLoadTimer); friendLoadExpired = false; friendOrder = [];
+    clearTimeout(friendLoadTimer); friendLoadExpired = false; friendOrder = []; ownProgressSettled = false;
     requestCardsReady.clear(); requestCardsWaiting.clear();
     const friendHost = $("friendsList"); friendHost.replaceChildren(); delete friendHost.dataset.friendReady;
     myProfile = {}; myCode = ""; myNick = ""; myNameSet = false;
@@ -1858,7 +1861,7 @@ async function main() {
       }
       progressVerified = true;
     } catch (e) { console.warn(e); O().toast("Не удалось загрузить прогресс. Проверьте интернет."); }
-    finally { progressRecoveryBusy = false; }
+    finally { if(me && me.uid===user.uid){progressRecoveryBusy = false; ownProgressSettled = true; friendUpdates.request();} }
     if (!me || me.uid !== user.uid) return;
     if (O().progressLoaded) O().progressLoaded();
     try { window.dispatchEvent(new Event("og-auth")); } catch (e) {}

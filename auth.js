@@ -576,19 +576,29 @@ async function main() {
     document.addEventListener("keydown", escClose);
 
     const head = el("div", "fhead"), ht = el("div");
-    ht.append(el("h2", null, isMe ? (d.name || "Вы") + " (вы)" : (d.name || "Читатель")), el("div", "hint", (d.streak || 0) + " " + O().plural(d.streak || 0, "день подряд", "дня подряд", "дней подряд")));
+    ht.append(el("h2", null, isMe ? (d.name || "Вы") + " (вы)" : (d.name || "Читатель")));
      const x = el("button", "fclose", "×"); x.type = "button"; x.setAttribute("aria-label", "Закрыть"); x.addEventListener("click", closeProfile);
     head.append(avatarEl(d.name, d.photo, 64, isMe ? myPhotoHQ() : (d.photoHQ || "")), ht, x);
 
     const stats = el("div", "fstats");
-    [[d.streak || 0, "подряд"], [d.best || 0, "рекорд"], [(d.ntRead || 0) + (d.otRead || 0), "отрывков"], [d.gems || 0, "алмазов"]].forEach(([v, l]) => { const c = el("div", "fstat"); c.append(el("b", null, String(v)), el("span", null, l)); stats.append(c); });
+    const streak = d.streak || 0;
+    const streakCell = el("div", "fstat fstat-streak");
+    const flame = flameSvg(readToday);
+    flame.setAttribute("aria-hidden", "true");
+    streakCell.append(flame, el("span", null, streak + " " + O().plural(streak, "день подряд", "дня подряд", "дней подряд")));
+    stats.append(streakCell);
+    [[d.best || 0, "рекорд"], [(d.ntRead || 0) + (d.otRead || 0), "отрывков"], [d.gems || 0, "алмазов"]].forEach(([v, l]) => { const c = el("div", "fstat"); c.append(el("b", null, String(v)), el("span", null, l)); stats.append(c); });
 
-    const reading = el("div", "freading"); reading.append(el("span", "label", "Где читает"));
+    const reading = el("div", "freading");
     const schedule = readingSchedule(d);
     const passages = Array.isArray(schedule?.passages)
       ? schedule.passages.filter(p => p && typeof p.ref === "string").slice(0, 3) : [];
+    const scheduleName = schedule?.name || d.planName || (passages.length ? "Моё расписание" : "");
+    const scheduleHeading = el("div", "hint freading-title");
+    scheduleHeading.append(el("strong", null, "Расписание"));
+    if (scheduleName) scheduleHeading.append(": " + scheduleName);
+    reading.append(scheduleHeading);
     if (passages.length) {
-      reading.append(el("small", "hint", "Расписание: " + (schedule.name || d.planName || "Моё расписание")));
       passages.forEach((p) => {
         const row = el("div", "frow"), left = el("div");
         const samePlan = schedule.name === d.planName;
@@ -608,7 +618,6 @@ async function main() {
         reading.append(row);
       });
     } else {
-    if (d.planName && (d.plan || "spb") !== O().planId) reading.append(el("small", "hint", "Расписание: " + d.planName));
     fKeys(d).forEach((k) => {
       const done = fDone(d, k), planReadToday = d[k + "Last"] === t;
       const row = el("div", "frow"), left = el("div");
@@ -692,14 +701,7 @@ async function main() {
     const shelfBtn = el("button", "bsbtn", (isMe ? "Моя библиотека" : "Книжная полка") + " · " + bn + " из 66"); shelfBtn.type = "button";
     shelfBtn.prepend(profileButtonIcon("lib"));
     shelfBtn.addEventListener("click", () => O().openBooks(isMe ? null : bl, isMe ? null : (d.name || "").split(" ")[0], isMe ? null : d.ministryBooks));
-    // пройденные расписания (и для друзей), а у себя — ещё и управление своими расписаниями
-    const pd = isMe ? null : (Array.isArray(d.plansDone) ? d.plansDone : []);
-    const pathBtn = el("button", "bsbtn", "Прочитанные расписания · " + (isMe ? O().finishedCount() : pd.length)); pathBtn.type = "button";
-    pathBtn.prepend(profileButtonIcon("plan"));
-    pathBtn.addEventListener("click", () => O().openFinished(isMe ? null : pd, isMe ? null : (d.name || "").split(" ")[0]));
-    const prow = el("div", "fprow"); prow.append(pathBtn);
-    prow.style.gridTemplateColumns = "1fr"; // свои расписания и челленджи — во вкладке «Расписания»
-    sheet.append(head, stats, shelfBtn, prow, reading);
+    sheet.append(head, stats, shelfBtn, reading);
     const act = !isMe && myFriends.includes(id) && friendAction(id, d);
     if (act) sheet.append(act);
     else if (!isMe && myFriends.includes(id) && !litToday(d) && !litToday(O().summary())) sheet.append(el("p", "hint", "Прочитайте сегодняшний отрывок — и сможете воодушевить друга."));

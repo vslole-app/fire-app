@@ -1503,7 +1503,7 @@ function openBooks(list,who,ministryBooks,embedded=false){
     return {id:x.id,B,total,n,last:typeof x.last==="string"?x.last:"",full:n===total,pct:total?Math.round(n/total*100):0};
   }).filter(Boolean).sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:0);
   const byId=new Map(ms.map(o=>[o.id,o])),lsAll=ms.filter(o=>o.B.k==="ls"),oth=ms.filter(o=>o.B.k!=="ls");
-  const nB=read.size,nLs=lsAll.filter(o=>o.full).length;
+  const nLs=lsAll.filter(o=>o.full).length;
   // итоги: по одной плитке на каждую часть шкафа
   const sum=el("div","libsum");
   const tile=(num,of,label,status="")=>{
@@ -1513,7 +1513,6 @@ function openBooks(list,who,ministryBooks,embedded=false){
     if(status)t.append(el("small","libtile-status",status));
     return t;
   };
-  sum.append(tile(nB,66,"Библия"));
   if(mine){
     const starting=lsAll.length-nLs,nO=oth.filter(o=>o.full).length,reading=oth.length-nO;
     sum.append(tile(nLs,MSB.ls.length,"Жизнеизучение",starting?"Начато "+starting:""),
@@ -1548,7 +1547,8 @@ function openBooks(list,who,ministryBooks,embedded=false){
     oth.forEach((o,i)=>row.append(spineMs(o,o.B,o.B.t.length>16?o.B.t.slice(0,15)+"…":o.B.t,pal[i%pal.length],o.B.t+" · "+o.B.a)));
     row.append(el("span","bslot","Здесь встанут книги, которые вы читаете"));
     board("Книги служения",oth.filter(o=>o.full).length+" прочитано",row,"lsboard")}
-  sheet.append(cab,info,sum);
+  sheet.append(cab,info);
+  if(sum.childElementCount)sheet.append(sum);
   // Мой путь: та же география книг, что на глобусе читателей.
   // Тропинки строятся по отметкам чтения, а точки показывают завершённые книги.
   const validDate=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&d<=today();

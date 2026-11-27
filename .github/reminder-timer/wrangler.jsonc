@@ -1,0 +1,11 @@
+{
+  "name": "vslole-reminder-timer",
+  "main": "timer.mjs",
+  "compatibility_date": "2025-01-01",
+  "workers_dev": false,
+  "triggers": {
+    "crons": [
+      "0,30 * * * *"
+    ]
+  }
+}

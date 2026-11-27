@@ -782,6 +782,89 @@ async function main() {
   }
 
   let allOpen = false, allTab = "friends";
+  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "", readerFilter = "all";
+  const stopReaders = () => {
+    if (readerUnsub) readerUnsub();
+    readerUnsub = null; readerRows = []; readerState = "idle";
+  };
+  const startReaders = () => {
+    if (!me || readerUnsub) return;
+    readerState = "loading";
+    const uid = me.uid;
+    const q = F.query(F.collection(db, "globe"), F.limit(1000));
+    readerUnsub = F.onSnapshot(q, {includeMetadataChanges:true}, snap => {
+      if (!allOpen || !me || me.uid !== uid) return;
+      readerRows = snap.docs.map(doc => {
+        const p = doc.data();
+        return {uid:doc.id,name:String(p.name || "Читатель"),photo:p.photo || "",streak:Number(p.streak)||0};
+      });
+      readerState = snap.metadata.fromCache ? "cached" : "ready";
+      updateReaderList();
+    }, e => {
+      console.warn("Reader directory unavailable", e);
+      readerState = "error"; updateReaderList();
+    });
+  };
+  function updateReaderList() {
+    const host = document.querySelector(".fall .reader-directory");
+    if (!host || allTab !== "readers" || !me) return;
+    const count = host.querySelector(".reader-count"), list = host.querySelector(".reader-list");
+    count.textContent = readerState === "loading" ? "Загрузка читателей…" :
+      (readerRows.length === 1000 ? "Не менее " : "") + readerRows.length + " · читателей в открытом списке";
+    list.replaceChildren();
+    if (readerState === "error") {
+      list.append(el("p","hint","Не удалось загрузить список. Проверьте интернет."));
+      const retry=el("button","btn","Повторить");retry.type="button";
+      retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();});list.append(retry);return;
+    }
+    if (readerState === "loading") return;
+    if (readerState === "cached") list.append(el("p","hint","Показан сохранённый список. Обновляем…"));
+    const normalize = s => String(s || "").toLocaleLowerCase("ru").replace(/ё/g,"е").trim();
+    const words = normalize(readerSearch).split(/\s+/).filter(Boolean);
+    const people = readerRows.filter(p => p.uid !== me.uid &&
+      (readerFilter !== "new" || (!myFriends.includes(p.uid) && !myFollowing.includes(p.uid))) &&
+      words.every(w => normalize(p.name).includes(w)))
+      .sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+    for (const p of people) {
+      const row = el("div","reader-row");
+      const profile = el("button","reader-profile");profile.type="button";
+      profile.append(avatarEl(p.name,p.photo,40),el("span","reader-name",p.name));
+      profile.addEventListener("click",()=>{closeAll();openProfile(p.uid);});
+      row.append(profile);
+      if (myFriends.includes(p.uid)) row.append(el("span","reader-status friend","В друзьях"));
+      else if (myFollowing.includes(p.uid)) row.append(el("span","reader-status","Заявка отправлена"));
+      else {
+        const pending = pendingRequests().includes(p.uid);
+        const b = el("button","btn btn-xp reader-add",pending?"Принять":"Добавить"); b.type="button";
+        b.addEventListener("click",async()=>{
+          b.disabled=true;
+          const ok=await addFriendUid(p.uid);
+          if (!b.isConnected) return;
+          if (ok) b.textContent=pending?"В друзьях":"Заявка отправлена";
+          else b.disabled=false;
+        });
+        row.append(b);
+      }
+      list.append(row);
+    }
+    if (!people.length) list.append(el("p","hint","Читатели не найдены."));
+  }
+  function readerDirectory() {
+    const host=el("div","reader-directory");
+    const metrics=el("div","reader-metrics");
+    metrics.append(el("strong","reader-count","Загрузка читателей…"),el("span",null,"Мои друзья · "+myFriends.length));
+    const input=el("input","reader-search");input.type="search";input.placeholder="Найти по имени";input.value=readerSearch;
+    input.setAttribute("aria-label","Найти читателя по имени");
+    input.addEventListener("input",()=>{readerSearch=input.value;updateReaderList();});
+    const filters=el("div","ftabs reader-filters");
+    [["all","Все читатели"],["new","Не в друзьях"]].forEach(([key,label])=>{
+      const b=el("button","ftab"+(readerFilter===key?" on":""),label);b.type="button";
+      b.addEventListener("click",()=>{readerFilter=key;for(const child of filters.children)child.classList.toggle("on",child===b);updateReaderList();});
+      filters.append(b);
+    });
+    host.append(metrics,input,filters,el("div","reader-list"));
+    return host;
+  }
   function sortedRows() {
     const mine = Object.assign(O().summary(), { name: myName(), photo: myPhoto() });
     const rows = [{ d: mine, me: true, uid: me.uid }].concat(myFriends.filter((u) => friendData[u]).map((u) => ({ d: friendData[u], me: false, uid: u })));
@@ -802,29 +885,32 @@ async function main() {
   }
   // отдельный экран: все друзья, подписчики и подписки (удобно, когда друзей много)
   function openAll(tab) {
-    closeProfile(); allTab = tab || allTab; allOpen = true;
+    closeAll(); closeProfile(); allTab = tab || allTab; allOpen = true;
+    readerSearch = ""; readerFilter = "all";
     const modal = el("div", "fmodal fall"), sheet = el("div", "fsheet");
     sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true");
     modal.addEventListener("click", (e) => { if (e.target === modal) closeAll(); });
     document.addEventListener("keydown", escAll);
     modal.append(sheet); document.body.append(modal); drawAll();
   }
-  function closeAll() { allOpen = false; const m = document.querySelector(".fall"); if (m) m.remove(); document.removeEventListener("keydown", escAll); }
+  function closeAll() { allOpen = false; stopReaders(); const m = document.querySelector(".fall"); if (m) m.remove(); document.removeEventListener("keydown", escAll); }
   function escAll(e) { if (e.key === "Escape") closeAll(); }
   function drawAll() {
     const sheet = document.querySelector(".fall .fsheet"); if (!sheet) { allOpen = false; return; }
     sheet.textContent = "";
-    const head = el("div", "fhead"), h = el("h2", null, "Друзья и подписчики");
+    const head = el("div", "fhead"), h = el("h2", null, "Вместе в Слове");
     const x = el("button", "fclose", "×"); x.type = "button"; x.setAttribute("aria-label", "Закрыть"); x.addEventListener("click", closeAll);
     head.append(h, x);
     const rows = sortedRows(), reqs = pendingRequests(), fols = followersOnly(), subs = subsOnly();
     const tabs = el("div", "ftabs");
-    [["friends", "Друзья", rows.length - 1], ["followers", "Подписчики", fols.length + reqs.length], ["subs", "Подписки", subs.length]].forEach(([k, t, n]) => {
-      const b = el("button", "ftab" + (allTab === k ? " on" : ""), t + " · " + n); b.type = "button";
+    [["readers", "Читатели", null], ["friends", "Друзья", myFriends.length], ["followers", "Входящие", fols.length + reqs.length], ["subs", "Исходящие", subs.length]].forEach(([k, t, n]) => {
+      const b = el("button", "ftab" + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
       b.addEventListener("click", () => { allTab = k; drawAll(); }); tabs.append(b);
     });
     const list = el("div", "friends");
-    if (allTab === "friends") {
+    if (allTab === "readers") {
+      list.append(readerDirectory());
+    } else if (allTab === "friends") {
       rows.forEach((r) => list.append(friendRow(r.d, r.me, r.uid)));
       if (rows.length < 2) list.append(el("p", "hint", "Пока нет друзей."));
     } else if (allTab === "followers") {
@@ -837,8 +923,9 @@ async function main() {
     }
     const top = el("div", "fallTop"); top.append(head, tabs); // шапка с крестиком и вкладками не уезжает при прокрутке
     sheet.append(top, list);
+    if (allTab === "readers") { startReaders(); updateReaderList(); }
   }
-  $("friendsAll").addEventListener("click", () => openAll("friends"));
+  $("friendsAll").addEventListener("click", () => openAll("readers"));
 
   /* ---------- глобус читателей ---------- */
   // globe/{uid}: имя, фото, книга, которую человек читает сейчас, огонёк и серия. Видят все вошедшие; можно скрыть себя.
@@ -1161,7 +1248,13 @@ async function main() {
       box.append(tg);
     }
     $("friendsAll").hidden = false;
-    if (allOpen) drawAll();
+    if (allOpen) {
+      if (allTab === "readers" && document.querySelector(".reader-directory")) {
+        const metric=document.querySelector(".reader-metrics > span");
+        if(metric)metric.textContent="Мои друзья · "+myFriends.length;
+        updateReaderList();
+      } else drawAll();
+    }
     // на пути — только друзья
     O().setPathPeople(myFriends.filter((u) => friendData[u]).map((u) => ({ id: u, name: friendData[u].name, photo: friendData[u].photo, nt: friendData[u].ntNext || 0, ot: friendData[u].otNext || 0, conf: friendData[u].conf || null, notes: Array.isArray(friendData[u].notes) ? friendData[u].notes.slice(0, 10) : [], plan: friendData[u].plan || "spb", keys: friendData[u].keys, refs: (Array.isArray(friendData[u].keys) && friendData[u].keys.length ? friendData[u].keys : ["nt", "ot"]).map((k) => friendData[u][k + "Ref"] || null) })));
     if (!myFriends.length) box.append(el("p", "hint", "Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку."));

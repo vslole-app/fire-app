@@ -582,12 +582,23 @@ async function main() {
 
     const stats = el("div", "fstats");
     const streak = d.streak || 0;
-    const streakCell = el("div", "fstat fstat-streak");
-    const flame = flameSvg(readToday);
-    flame.setAttribute("aria-hidden", "true");
-    streakCell.append(flame, el("span", null, streak + " " + O().plural(streak, "день подряд", "дня подряд", "дней подряд")));
-    stats.append(streakCell);
-    [[d.best || 0, "рекорд"], [(d.ntRead || 0) + (d.otRead || 0), "отрывков"], [d.gems || 0, "алмазов"]].forEach(([v, l]) => { const c = el("div", "fstat"); c.append(el("b", null, String(v)), el("span", null, l)); stats.append(c); });
+    const statIcon = name => {
+      const icon = el("span", "fstat-icon");
+      icon.setAttribute("aria-hidden", "true");
+      if (name === "flame") icon.append(flameSvg(readToday));
+      else if (name === "gem") icon.append(el("span", "gemicon"));
+      else icon.innerHTML = window.OgonekIcons.ICO[name];
+      return icon;
+    };
+    [
+      [streak, O().plural(streak, "день подряд", "дня подряд", "дней подряд"), "flame"],
+      [d.best || 0, "Рекорд дней", "awards"],
+      [d.gems || 0, O().plural(d.gems || 0, "алмаз", "алмаза", "алмазов"), "gem"]
+    ].forEach(([value, label, icon]) => {
+      const cell = el("div", "fstat");
+      cell.append(statIcon(icon), el("b", null, String(value)), el("span", "fstat-label", label));
+      stats.append(cell);
+    });
 
     const reading = el("div", "freading");
     const schedule = readingSchedule(d);
@@ -605,7 +616,7 @@ async function main() {
         const matchingKey = samePlan ? fKeys(d).find(k => fRef(d,k) === p.ref && (!p.key || p.key === k)) : null;
         const pace = fLiveAhead(d, p.key || matchingKey, t, schedule === d.globeSchedule ? p : null);
         const label = p.label === "НЗ" ? "Новый Завет" : p.label === "ВЗ" ? "Ветхий Завет" : p.label || "Отрывок";
-        left.append(el("small", null, label + (pace === null ? " · нет данных о темпе" : " · " + fmtAhead(pace))));
+        left.append(el("small", null, label + (pace === 0 ? "" : pace === null ? " · нет данных о темпе" : " · " + fmtAhead(pace))));
         const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === "https:" ? x.href : ""; } catch (_) { return ""; } };
         const matching = fKeys(d).find(k => fRef(d, k) === p.ref);
         const url = p.ref && (safeUrl(p.url) || (matching && safeUrl(fUrl(d, matching))) || (O().urlOfRef && safeUrl(O().urlOfRef(p.ref))));
@@ -621,7 +632,8 @@ async function main() {
     fKeys(d).forEach((k) => {
       const done = fDone(d, k), planReadToday = d[k + "Last"] === t;
       const row = el("div", "frow"), left = el("div");
-      left.append(el("small", null, fLabel(d, k) + " · " + fmtAhead(fLiveAhead(d, k, t))));
+      const pace = fLiveAhead(d, k, t);
+      left.append(el("small", null, fLabel(d, k) + (pace === 0 ? "" : " · " + fmtAhead(pace))));
       if (done) left.append(el("b", null, "Пройдено"));
       else { const a = el("a", null, fRef(d, k)); a.href = fUrl(d, k); a.target = "_blank"; a.rel = "noopener"; left.append(a); }
       row.append(left, el("span", planReadToday ? "ok" : "hint", planReadToday ? "✓" : "следующий отрывок"));
@@ -698,8 +710,18 @@ async function main() {
       icon.innerHTML = window.OgonekIcons.ICO[name];
       return icon;
     };
-    const shelfBtn = el("button", "bsbtn", (isMe ? "Моя библиотека" : "Книжная полка") + " · " + bn + " из 66"); shelfBtn.type = "button";
-    shelfBtn.prepend(profileButtonIcon("lib"));
+    const shelfBtn = el("button", "bsbtn profile-shelf"); shelfBtn.type = "button";
+    const shelfLine = el("span", "profile-shelf-line");
+    const shelfName = isMe ? "Моя библиотека" : "Книжная полка";
+    shelfLine.append(profileButtonIcon("lib"), el("span", "profile-shelf-name", shelfName), el("span", "profile-shelf-count", bn + " из 66"));
+    const chevron = el("span", "profile-shelf-arrow");
+    chevron.setAttribute("aria-hidden", "true");
+    shelfLine.append(chevron);
+    const track = el("span", "profile-shelf-track"), fill = el("span", "profile-shelf-fill");
+    track.setAttribute("aria-hidden", "true");
+    fill.style.width = Math.max(0, Math.min(100, bn / 66 * 100)) + "%";
+    track.append(fill);
+    shelfBtn.append(shelfLine, track);
     shelfBtn.addEventListener("click", () => O().openBooks(isMe ? null : bl, isMe ? null : (d.name || "").split(" ")[0], isMe ? null : d.ministryBooks));
     sheet.append(head, stats, shelfBtn, reading);
     const act = !isMe && myFriends.includes(id) && friendAction(id, d);
@@ -707,7 +729,8 @@ async function main() {
     else if (!isMe && myFriends.includes(id) && !litToday(d) && !litToday(O().summary())) sheet.append(el("p", "hint", "Прочитайте сегодняшний отрывок — и сможете воодушевить друга."));
     // стихи, которые затронули (из сводки профиля)
     try { const nb = O().notesEl && O().notesEl(d.notes, isMe); if (nb) sheet.append(nb); } catch (e) { console.warn(e); }
-    sheet.append(aboutBox, badges);
+    if ((isMe && edit) || String(d.about || "").trim()) sheet.append(aboutBox);
+    sheet.append(badges);
 
     if (!isMe) {
       // друзья друга: можно сразу добавить к себе

@@ -2,7 +2,7 @@
 import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
-import { createFriendActions, pendingFriendRequests, createCoalescedUpdate } from "./src/friend-actions.js?v=20261127-friends-fast";
+import { createFriendActions, pendingFriendRequests, createCoalescedUpdate, buildFriendPreviews } from "./src/friend-actions.js?v=20261127-friends-preview";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
@@ -88,12 +88,13 @@ async function main() {
   /* ---------- friends ---------- */
   let me = null, myRef = null, myCode = "", myNick = "", myNameSet = false, friendUnsubs = {}, friendData = {}, myUnsub = null, myFriends = [], myFollowing = [], myFollowers = [], myDeclined = [], globeHide = false, activeProfileId = null;
   const serverVerifiedFriends = new Set();
-  let friendsLoaded = false, lastPathPeople = "";
+  let friendsLoaded = false, lastPathPeople = "", friendPreviews = Object.create(null);
+  const friendUnavailable = new Set();
+  const friendCardIndex = () => buildFriendPreviews(myFriends, friendData, friendPreviews);
   const friendUpdates = createCoalescedUpdate(() => { if (!me) return; renderFriends(); if (globeList && window.OgonekGlobe && window.OgonekGlobe.isOpen()) refreshGlobeList(); publishFriendCards(); }, cb => setTimeout(cb, 50), clearTimeout);
   function publishFriendCards() {
     if (!myRef || !friendsLoaded || !fofChanged()) return;
-    const fof = {};
-    myFriends.forEach(u => { const f = friendData[u]; if (f) fof[u] = { n: String(f.name || "").slice(0, 60), p: f.photo || "" }; });
+    const fof = friendCardIndex();
     lastFof = JSON.stringify(fof);
     F.setDoc(myRef, { fof }, { merge: true }).catch(e => console.warn(e));
   }
@@ -111,7 +112,14 @@ async function main() {
     const data = snap.exists() ? snap.data() : null;
     globeHide = !!(data && data.globeHide);
     myNick = (data && data.nick) || ""; myNameSet = !!(data && (data.nameSet || data.nick));
-    if (data && data.code) { myCode = data.code; return; }
+    if (data && data.code) myCode = data.code;
+    // Start friend subscriptions independently of reading recovery.
+    if (!friendsLoaded && data) {
+      friendPreviews = data.fof || Object.create(null);
+      myFollowers = data.followers || []; myDeclined = data.declined || [];
+      syncFriendSubs(data.friends || [], data.following || []);
+    }
+    if (data && data.code) return;
     for (let i = 0; i < 6; i++) {
       const code = randomCode(), cref = F.doc(db, "codes", code);
       const ok = await F.runTransaction(db, async (tx) => {
@@ -136,8 +144,7 @@ async function main() {
   let progressVerified = false, profileReady = false;
   let progressRecoveryBusy = false, profileRecoveryBusy = false;
   function fofChanged() {
-    const fof = {};
-    myFriends.forEach((u) => { const f = friendData[u]; if (f) fof[u] = { n: String(f.name || "").slice(0, 60), p: f.photo || "" }; });
+    const fof = friendCardIndex();
     return JSON.stringify(fof) !== lastFof;
   }
   // A locally completed Exodus passage may still be newer than an older
@@ -238,8 +245,7 @@ async function main() {
       const publisherUid = me.uid;
       const s = O().summary();
       // имена и фото моих друзей — чтобы мои друзья видели, кто у меня в друзьях
-      const fof = {};
-      myFriends.forEach((u) => { const f = friendData[u]; if (f) fof[u] = { n: String(f.name || "").slice(0, 60), p: f.photo || "" }; });
+      const fof = friendCardIndex();
       lastFof = JSON.stringify(fof);
       const profileUpdate = Object.assign(s, { flameDay: fLit(s, O().today()) ? O().today() : "", fof, name: myName(), photo: myPhoto(), updated: F.serverTimestamp() });
       if (myCode) profileUpdate.code = myCode; // never erase codes when initialization fails
@@ -279,19 +285,23 @@ async function main() {
 
   // подписка на профили: друзья и те, на кого я подписан
   function syncFriendSubs(friends, following) {
-    myFriends = friends; myFollowing = following;
-    const list = [...new Set(friends.concat(following))];
-    Object.keys(friendUnsubs).forEach((uid) => { if (!list.includes(uid)) { friendUnsubs[uid](); delete friendUnsubs[uid]; delete friendData[uid]; } });
+    myFriends = [...new Set(friends)]; myFollowing = [...new Set(following)];
+    const list = [...new Set(myFriends.concat(myFollowing))], ids = new Set(list);
+    const viewer = me && me.uid;
+    friendPreviews = buildFriendPreviews(myFriends, friendData, friendPreviews);
+    Object.keys(friendUnsubs).forEach((uid) => { if (!ids.has(uid)) { friendUnsubs[uid](); delete friendUnsubs[uid]; delete friendData[uid]; serverVerifiedFriends.delete(uid); friendUnavailable.delete(uid); } });
     list.forEach((uid) => {
       if (friendUnsubs[uid]) return;
-      friendUnsubs[uid] = F.onSnapshot(F.doc(db, "profiles", uid),
+      friendUnsubs[uid] = F.onSnapshot(F.doc(db, "profiles", uid), {includeMetadataChanges:true},
         (snap) => {
+          if (!me || me.uid !== viewer || !friendUnsubs[uid]) return;
           // An older cached snapshot must not replace a profile already
           // confirmed from Firestore's server on this phone.
           if (snap.metadata && snap.metadata.fromCache && serverVerifiedFriends.has(uid)) return;
           if (snap.metadata && !snap.metadata.fromCache) serverVerifiedFriends.add(uid);
           const before = friendData[uid];
-          if (snap.exists()) friendData[uid] = snap.data(); else delete friendData[uid];
+          if (snap.exists()) { friendData[uid] = snap.data(); friendUnavailable.delete(uid); }
+          else if (!snap.metadata.fromCache) { delete friendData[uid]; friendUnavailable.add(uid); }
           friendUpdates.request();
           // Refresh an open friend's profile instead of leaving a frozen snapshot.
           if (activeProfileId === uid && JSON.stringify(before) !== JSON.stringify(friendData[uid]) && document.querySelector(".fmodal")) {
@@ -299,7 +309,7 @@ async function main() {
           }
           // Render and publish the friend cards once per burst of snapshots.
         },
-        (e) => { console.warn("Friend subscription failed", e); delete friendData[uid]; friendUpdates.request(); });
+        (e) => { if (!me || me.uid !== viewer || !friendUnsubs[uid]) return; console.warn("Friend subscription failed", e); delete friendData[uid]; friendUnavailable.add(uid); friendUpdates.request(); });
     });
     friendsLoaded = true;
     friendUpdates.request();
@@ -901,10 +911,25 @@ async function main() {
   }
   function sortedRows() {
     const mine = Object.assign(O().summary(), { name: myName(), photo: myPhoto() });
-    const rows = [{ d: mine, me: true, uid: me.uid }].concat(myFriends.filter((u) => friendData[u]).map((u) => ({ d: friendData[u], me: false, uid: u })));
-    return rows.sort((a, b) => (b.d.streak || 0) - (a.d.streak || 0));
+    const rows = [{ d: mine, me: true, uid: me.uid }].concat(myFriends.map(u => {
+      const d = friendData[u], preview = friendPreviews[u] || {};
+      return {d:d || {name:preview.n || "Читатель",photo:preview.p || ""}, me:false, uid:u, pending:!d || !serverVerifiedFriends.has(u)};
+    }));
+    return rows.sort((a,b) => Number(!!a.pending)-Number(!!b.pending) || (b.d.streak || 0)-(a.d.streak || 0));
   }
-  const followersOnly = () => myFollowers.filter((u) => !myFriends.includes(u) && !pendingRequests().includes(u));
+  function friendListRow(r) {
+    if (!r.pending) return friendRow(r.d, r.me, r.uid);
+    const row = el("div","friend"), mid = el("div");
+    mid.style.minWidth = "0";
+    mid.append(el("div","fname",r.d.name || "Читатель"),
+      el("div","hint",friendUnavailable.has(r.uid) ? "Данные пока недоступны" : "Обновляем чтение…"));
+    row.append(avatarEl(r.d.name,r.d.photo,40),mid);
+    row.tabIndex = 0; row.setAttribute("role","button"); row.title="Открыть профиль";
+    row.addEventListener("click",()=>openProfile(r.uid));
+    row.addEventListener("keydown",e=>{if(e.key==="Enter")openProfile(r.uid);});
+    return row;
+  }
+  const followersOnly = () => { const friends = new Set(myFriends), pending = new Set(pendingRequests()); return myFollowers.filter(u => !friends.has(u) && !pending.has(u)); };
   const subsOnly = () => myFollowing.filter((u) => !myFriends.includes(u));
   function personRow(u, btnText, onBtn, note) {
     const row = el("div", "ffrow freq"), nm = el("span", null, "…"), av = el("div", "favatar", "?");
@@ -947,8 +972,8 @@ async function main() {
     } else if (allTab === "friends") {
       const rows = sortedRows();
       list.append(requestSection(reqs));
-      rows.forEach((r) => list.append(friendRow(r.d, r.me, r.uid)));
-      if (!friendsLoaded || rows.length - 1 < myFriends.length) list.append(el("p","hint","Загружаем друзей…"));
+      rows.forEach((r) => list.append(friendListRow(r)));
+      if (!friendsLoaded) list.append(el("p","hint","Загружаем друзей…"));
       else if (!myFriends.length) list.append(el("p", "hint", "Пока нет друзей."));
     }
     const top = el("div", "fallTop"); top.append(head, tabs); // шапка с крестиком и вкладками не уезжает при прокрутке
@@ -1277,7 +1302,7 @@ async function main() {
     const rows = sortedRows();
     // на главной: я и два друга; все остальные — на отдельном экране «Все друзья и подписчики»
     let shown = 0;
-    rows.forEach((r) => { if (r.me || shown < 2) { if (!r.me) shown++; box.append(friendRow(r.d, r.me, r.uid)); } });
+    rows.forEach((r) => { if (r.me || shown < 2) { if (!r.me) shown++; box.append(friendListRow(r)); } });
     const more = myFriends.length - shown, fols = followersOnly(), subs = subsOnly();
     if (more > 0 || fols.length || subs.length) {
       const tg = el("button", "btn fmore"); tg.type = "button";
@@ -1299,7 +1324,7 @@ async function main() {
     const pathPeople = myFriends.filter((u) => friendData[u]).map((u) => ({ id: u, name: friendData[u].name, photo: friendData[u].photo, nt: friendData[u].ntNext || 0, ot: friendData[u].otNext || 0, conf: friendData[u].conf || null, notes: Array.isArray(friendData[u].notes) ? friendData[u].notes.slice(0, 10) : [], plan: friendData[u].plan || "spb", keys: friendData[u].keys, refs: (Array.isArray(friendData[u].keys) && friendData[u].keys.length ? friendData[u].keys : ["nt", "ot"]).map((k) => friendData[u][k + "Ref"] || null) }));
     const pathSignature = JSON.stringify(pathPeople);
     if (pathSignature !== lastPathPeople) { lastPathPeople = pathSignature; O().setPathPeople(pathPeople); }
-    if (!friendsLoaded || rows.length - 1 < myFriends.length) box.append(el("p","hint","Загружаем друзей…"));
+    if (!friendsLoaded) box.append(el("p","hint","Загружаем друзей…"));
     else if (!myFriends.length) box.append(el("p", "hint", "Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку."));
     const bell = bellButton(); if (bell) box.append(bell);
   }
@@ -1699,7 +1724,8 @@ async function main() {
     sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
     refreshPathCount();
     friendUpdates.clear(); closeAll(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
-    friendsLoaded = false; lastPathPeople = ""; lastFof = "";
+    friendsLoaded = false; lastPathPeople = ""; lastFof = ""; friendPreviews = Object.create(null); friendUnavailable.clear();
+    myProfile = {}; myCode = ""; myNick = ""; myNameSet = false;
     Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = [];
     if (myUnsub) { myUnsub(); myUnsub = null; }
     if (inboxUnsub) { inboxUnsub(); inboxUnsub = null; } cheerQueue = []; seenCheers.clear();
@@ -1739,6 +1765,10 @@ async function main() {
 
     const ref = F.doc(db, "users", user.uid);
     myRef = F.doc(db, "profiles", user.uid);
+    // Make the friends interface available before any network reads finish.
+    $("friendsCard").hidden = false; $("inviteCard").hidden = false;
+    { const fe = $("friendsEmpty"); if (fe) fe.hidden = true; }
+    renderFriends();
     // Fetch own social profile and reading state in parallel.
     profileRecoveryBusy = true;
     const startupProfile = ensureProfile(user).then(() => ({ok:true}), error => ({ok:false,error}));
@@ -1816,6 +1846,7 @@ async function main() {
         if (!profileReady && snap.exists() && !snap.metadata.fromCache) { profileReady = true; publishSummary(true); }
         else if (hideChanged && profileReady && progressVerified) publishSummary();
         // Заявки показываем только в разделе друзей, без всплывающих уведомлений.
+        friendPreviews = buildFriendPreviews(myProfile.friends || [], friendData, myProfile.fof || friendPreviews);
         syncFriendSubs(myProfile.friends || [], myProfile.following || []);
         globeRelSync();
       });

@@ -5,7 +5,10 @@ globalThis.window={Ogonek:{planId:"spb",DAYS:364}};
 const {fLit,fProfileReadToday,fScheduleReadToday,fLiveAhead}=await load("friend-progress");
 const {createEncouragementConfig}=await load("encouragement-config");
 const {createEncouragementService}=await load("encouragement-service");
-const {createFriendActions,pendingFriendRequests,createCoalescedUpdate}=await load("friend-actions");
+const {createFriendActions,pendingFriendRequests,createCoalescedUpdate,buildFriendPreviews}=await load("friend-actions");
+assert.deepEqual({...buildFriendPreviews(["a","b","c"],{a:{name:"New",photo:"new"}},{a:{n:"Old"},b:{n:"B",p:"b"},x:{n:"Removed"}})},{a:{n:"New",p:"new"},b:{n:"B",p:"b"}});
+assert.deepEqual({...buildFriendPreviews([], {a:{name:"A"}}, {a:{n:"A"}})},{});
+assert.deepEqual({...buildFriendPreviews(["a","a"],{}, {a:{n:"A"}})},{a:{n:"A",p:""}});
 {
   let calls=0, next=0; const jobs=new Map();
   const batch=createCoalescedUpdate(()=>calls++, cb=>{jobs.set(++next,cb);return next;}, id=>jobs.delete(id));

@@ -69,3 +69,13 @@ export function createCoalescedUpdate(run, schedule, cancel) {
     }
   };
 }
+
+export function buildFriendPreviews(ids, profiles, previews) {
+  const out = Object.create(null);
+  for (const uid of new Set(ids)) {
+    const live = profiles[uid], old = previews[uid];
+    if (live && live.name) out[uid] = {n:String(live.name).slice(0,60),p:live.photo || ""};
+    else if (old && old.n) out[uid] = {n:String(old.n).slice(0,60),p:old.p || ""};
+  }
+  return out;
+}

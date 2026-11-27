@@ -2,7 +2,7 @@
 import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
-import { createFriendActions, pendingFriendRequests, createCoalescedUpdate, buildFriendPreviews, friendListPhase } from "./src/friend-actions.js?v=20261127-friends-stable";
+import { createFriendActions, pendingFriendRequests, createCoalescedUpdate, buildFriendPreviews, friendListPhase, createProfileNavigation } from "./src/friend-actions.js?v=20261127-profile-open";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
@@ -567,50 +567,92 @@ async function main() {
     else av.textContent = (name || "?").trim().charAt(0).toUpperCase();
     return av;
   }
-  function closeProfile() { const m = document.querySelector(".fmodal"); if (m) m.remove(); activeProfileId = null; document.removeEventListener("keydown", escClose); }
+  const profileNavigation = createProfileNavigation();
+  function closeProfile() {
+    profileNavigation.cancel();
+    const m = document.querySelector(".fmodal:not(.fall)");
+    if (m) m.remove();
+    activeProfileId = null;
+    document.removeEventListener("keydown", escClose);
+  }
   function escClose(e) { if (e.key === "Escape") closeProfile(); }
 
-  async function openProfile(id, edit, skipRefresh) {
+  async function openProfile(id, edit, skipRefresh, preview) {
     if (!me) return;
     const viewerUid = me.uid;
     const isMe = id === "me" || id === viewerUid;
     let d = isMe ? Object.assign(O().summary(), { name: myName(), photo: myPhoto(), about: myProfile.about || "", friends: myFriends }) : friendData[id];
+    let loadingModal = null, loadingStatus = null;
+    if (!skipRefresh) {
+      closeProfile();
+      if (!isMe) {
+        const known = preview || d || cardCache[id] || readerRows.find(p=>p.uid===id) || {};
+        loadingModal = el("div","fmodal profile-opening");
+        const shell = el("div","fsheet");
+        shell.setAttribute("role","dialog"); shell.setAttribute("aria-modal","true");
+        shell.setAttribute("aria-busy","true");
+        const head = el("div","fhead"), title = el("h2",null,known.name || "Читатель");
+        const x = el("button","fclose","×"); x.type="button"; x.setAttribute("aria-label","Закрыть"); x.addEventListener("click",closeProfile);
+        head.append(avatarEl(known.name,known.photo,64),title,x);
+        loadingStatus = el("p","hint friends-loading","Загрузка профиля…"); loadingStatus.setAttribute("role","status");
+        shell.append(head,loadingStatus); loadingModal.append(shell);
+        loadingModal.addEventListener("click",e=>{if(e.target===loadingModal)closeProfile();});
+        document.body.append(loadingModal);
+        document.addEventListener("keydown",escClose);
+      }
+      if(allOpen) closeAll();
+    } else if (activeProfileId !== id && !isMe) return;
+    const token = profileNavigation.begin();
+    const current = () => !!me && me.uid===viewerUid && profileNavigation.current(token);
+    const failed = message => {
+      if(!current())return;
+      if(loadingModal && loadingStatus) {
+        loadingModal.querySelector(".fsheet").setAttribute("aria-busy","false");
+        loadingStatus.textContent=message;
+        const retry=el("button","btn","Повторить");retry.type="button";
+        retry.addEventListener("click",()=>openProfile(id,edit,false,preview));
+        loadingStatus.after(retry);
+      } else O().toast(message);
+    };
     if (!isMe && !skipRefresh) {
       // Friend's reading must come from the actual server before showing
       // a chapter number. The local onSnapshot cache may be days behind.
       try {
         const ref = F.doc(db, "profiles", id);
         const snap = await (F.getDocFromServer ? F.getDocFromServer(ref) : F.getDoc(ref));
-        if (!me || me.uid !== viewerUid) return;
+        if (!current()) return;
         if (snap.exists()) {
           d = snap.data();
           friendData[id] = d;
           serverVerifiedFriends.add(id);
           renderFriends();
         } else {
-          O().toast("Профиль друга пока недоступен.");
+          failed("Профиль пока недоступен.");
           return;
         }
       } catch (e) {
         console.warn("Could not verify live friend profile", e);
-        O().toast("Не удалось обновить расписание друга с сервера. Проверьте интернет.");
-        if (!d) return;
+        if (!current()) return;
+        failed("Не удалось загрузить профиль. Проверьте интернет.");
+        return;
       }
     } else if (!d) { // fallback for a profile outside the friends list
       try {
         const ref = F.doc(db, "profiles", id);
         const sn = await (F.getDocFromServer ? F.getDocFromServer(ref) : F.getDoc(ref));
-        if (!me || me.uid !== viewerUid) return;
+        if (!current()) return;
         d = sn.exists() ? sn.data() : null;
       } catch (e) { console.warn(e); }
-      if (!d) { O().toast("Не удалось открыть профиль. Проверьте интернет и попробуйте ещё раз."); return; }
+      if (!d) { failed("Не удалось открыть профиль. Проверьте интернет."); return; }
     }
-    closeProfile();
+    if (!current()) return;
+    const previousModal = loadingModal || document.querySelector(".fmodal:not(.fall)");
     activeProfileId = isMe ? me.uid : id;
     // Verify the independent globe flame too; the reading schedule above
     // has already been read directly from the server.
     if (!isMe && !skipRefresh && F.getDocFromServer) {
       F.getDocFromServer(F.doc(db, "globe", id)).then((snap) => {
+        if(!me || me.uid!==viewerUid) return;
         const day = O().today(), person = friendData[id] || d;
         const oldStatus = profileReadToday(person, id, day);
         if (snap.exists()) {
@@ -626,7 +668,14 @@ async function main() {
       }).catch((e) => console.warn("Could not verify globe day", e));
     }
     const t = O().today(), readToday = profileReadToday(d, isMe ? me.uid : id, t);
-    const modal = el("div", "fmodal"), sheet = el("div", "fsheet");
+    const modal = el("div", "fmodal profile-view"), sheet = el("div", "fsheet");
+    const mountProfile = () => {
+      if(!current())return;
+      modal.append(sheet);
+      if(previousModal && previousModal.isConnected) previousModal.replaceWith(modal);
+      else document.body.append(modal);
+      x.focus({preventScroll:true});
+    };
     modal.dataset.readToday = String(readToday);
     sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true");
     modal.addEventListener("click", (e) => { if (e.target === modal) closeProfile(); });
@@ -800,9 +849,9 @@ async function main() {
       sheet.append(fof);
       others.slice(0, 50).forEach(async (u) => {
         const row = el("div", "ffrow"); fof.append(row);
-        let c = {}; try { const snap = await F.getDoc(F.doc(db, "cards", u)); c = snap.exists() ? snap.data() : {}; } catch (e) {}
-        // имя: из карточки человека, из списка друзей друга или из моих друзей
         const known = (d.fof && d.fof[u]) || {}, mine = friendData[u] || {};
+        let c = cardCache[u] || (known.n ? {name:known.n,photo:known.p} : mine);
+        if (!c.name) c = await cardOf(u);
         const nm = c.name || known.n || mine.name || "", ph = c.photo || known.p || mine.photo || "";
         row.append(avatarEl(nm, ph, 34), el("span", null, nm || "Читатель"));
         row.style.cursor = "pointer"; row.title = "Открыть профиль";
@@ -823,7 +872,7 @@ async function main() {
         const go = el("button", "btn-main", asksMe ? "Принять заявку" : "Добавить в друзья"); go.type = "button";
         go.addEventListener("click", async () => { go.disabled = true; if (asksMe) await acceptRequest(id); else await addFriendUid(id); closeProfile(); });
         box.append(go); sheet.insertBefore(box, sheet.children[1]);
-        modal.append(sheet); document.body.append(modal); x.focus(); return;
+        mountProfile(); return;
       }
       const lbl = isFriend ? "Удалить из друзей" : "Отменить заявку и отписаться";
       if (!isFriend) { const h = el("p", "hint", "Заявка в друзья отправлена. Пока друг её не примет, вы подписаны на него."); h.style.margin = "0"; sheet.insertBefore(h, sheet.children[1]); }
@@ -834,7 +883,7 @@ async function main() {
       });
       sheet.append(rm);
     }
-    modal.append(sheet); document.body.append(modal); x.focus();
+    mountProfile();
     if (isMe && edit) { const ta = sheet.querySelector("textarea"); if (ta) { ta.scrollIntoView({ block: "center" }); if (!ta.value) ta.focus(); } }
   }
 
@@ -904,7 +953,7 @@ async function main() {
       const row = el("div","reader-row");
       const profile = el("button","reader-profile");profile.type="button";
       profile.append(avatarEl(p.name,p.photo,40),el("span","reader-name",p.name));
-      profile.addEventListener("click",()=>{closeAll();openProfile(p.uid);});
+      profile.addEventListener("click",()=>openProfile(p.uid,false,false,p));
       row.append(profile);
       if (friendSet.has(p.uid)) row.append(el("span","reader-status friend","В друзьях"));
       else if (followingSet.has(p.uid)) row.append(el("span","reader-status","Заявка отправлена"));

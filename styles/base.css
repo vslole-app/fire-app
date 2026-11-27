@@ -1343,3 +1343,8 @@ body.globe-open .fmodal .fsheet.lib-compact{
 .friends-loading{min-height:76px;display:grid;place-items:center;text-align:center;margin:0;color:var(--muted);animation:none!important}
 #friendsList,.fall .friends,.fall .reader-list{min-width:0}
 .fall .fsheet{animation:none; height: min(92dvh, 900px);}
+
+/* Instant reader navigation: no second entrance animation after the network response. */
+.profile-opening .fsheet,.profile-view .fsheet{animation:none}
+.profile-opening .fsheet{min-height: min(260px, 60dvh)}
+.profile-opening .fhead h2{min-width:0;overflow-wrap:anywhere;flex:1}

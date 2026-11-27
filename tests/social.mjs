@@ -5,7 +5,8 @@ globalThis.window={Ogonek:{planId:"spb",DAYS:364}};
 const {fLit,fProfileReadToday,fScheduleReadToday,fLiveAhead}=await load("friend-progress");
 const {createEncouragementConfig}=await load("encouragement-config");
 const {createEncouragementService}=await load("encouragement-service");
-const {createFriendActions,pendingFriendRequests,createCoalescedUpdate,buildFriendPreviews,friendListPhase}=await load("friend-actions");
+const {createFriendActions,pendingFriendRequests,createCoalescedUpdate,buildFriendPreviews,friendListPhase,createProfileNavigation}=await load("friend-actions");
+{const nav=createProfileNavigation(),a=nav.begin(),b=nav.begin();assert.equal(nav.current(a),false);assert.equal(nav.current(b),true);nav.cancel();assert.equal(nav.current(b),false);}
 assert.equal(friendListPhase(false,[],new Set([]),new Set([]),false),"loading");
 assert.equal(friendListPhase(true,["a","b"],new Set(["a"]),new Set([]),false),"loading");
 assert.equal(friendListPhase(true,["a","b"],new Set(["a","b"]),new Set([]),false),"ready");

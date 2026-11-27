@@ -519,7 +519,7 @@
     const s = root.querySelector(".gstat"), ids = new Set(), lit = new Set(), t0 = today();
     // считаем всех читателей, даже тех, кого пока некуда поставить на карте (иначе число «прыгало» по мере загрузки)
     people.forEach((p) => { ids.add(p.id); if (p.o ? p.fire : p.lit === t0) lit.add(p.id); });
-    s.textContent = opts && opts.loading ? "Загружаю читателей…" : "Читателей «В Слове»: " + ids.size + " · пламенеют сегодня: " + lit.size;
+    s.textContent = opts && opts.loading ? "Загружаю читателей…" : "«В Слове»: " + ids.size + " · пламенеет сегодня: " + lit.size;
     const n = new Set(ICE.people.map((p) => p.id)).size, ic = root.querySelector(".gisl");
     if (ic) { ic.hidden = !n; ic.lastChild.textContent = "Выбирают · " + n; }
     // Другие расписания доступны прямо на карте, без отдельной кнопки сверху.

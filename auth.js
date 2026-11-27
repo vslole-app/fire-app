@@ -1267,11 +1267,15 @@ async function main() {
     O().toast("Напоминание выключено");
   }
   async function refreshPush() { // токен иногда меняется — обновляем его и часовой пояс при каждом входе
-    if (!remindOn() || !pushCapable()) return;
-    try { await savePush(await pushToken(), true); lsSet(REMIND_KEY, "1"); } catch (e) { console.warn(e); }
+    if (!pushCapable() || Notification.permission !== "granted") return;
+    try {
+      const reminders = remindOn();
+      const friends = O().ntLoad().friends !== false;
+      await savePush(reminders || friends ? await pushToken() : null, reminders);
+    } catch (e) { console.warn(e); }
   }
   // кто уже разрешил уведомления — напоминание подключается само при входе
-  function autoReminder() { if (me && remindOn() && pushCapable()) refreshPush(); }
+  function autoReminder() { if (me) refreshPush(); }
 
   /* ---------- меню пользователя в шапке: «О себе» и «Выйти» ---------- */
   function closeUserMenu() { const m = document.querySelector(".usermenu"); if (m) m.remove(); top.setAttribute("aria-expanded", "false"); document.removeEventListener("click", outsideMenu, true); document.removeEventListener("keydown", escMenu); }

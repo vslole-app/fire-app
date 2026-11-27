@@ -21,9 +21,9 @@ export function createEncouragementConfig(){
       rule: () => "Позвать почитать вместе можно только одного друга в день — до того, как вы начнёте читать.",
       sent: "Приглашение отправлено! Начинайте читать", again: "Сегодня вы уже звали этого друга" },
     // челлендж «Божья гора»: воодушевить до 5 друзей в день; последнее сообщение — позвать в челлендж
-    conf: { list: (window.confCheers && window.confCheers.list) || ["Давай поднимемся на Синай!"], limit: 5, key: "ogonek-conf-cheers", field: "confCheer", title: "Челлендж «Божья гора»", verb: "зовёт на Синай",
+    conf: { list: (globalThis.window?.confCheers?.list) || ["Давай поднимемся на Синай!"], limit: 5, key: "ogonek-conf-cheers", field: "confCheer", title: "Челлендж «Божья гора»", verb: "зовёт на Синай",
       done: "Воодушевили ✓", full: "Сегодня вы уже воодушевили пятерых", btn: "Воодушевить", rule: () => "", sent: "Отправлено!", again: "Сегодня вы уже писали этому другу" },
-    confjoin: { list: (window.confCheers && window.confCheers.list) || [], limit: 99, key: "ogonek-conf-join", field: "confJoin", title: "Челлендж «Божья гора»", verb: "зовёт в челлендж «Божья гора»",
+    confjoin: { list: (globalThis.window?.confCheers?.list) || [], limit: 99, key: "ogonek-conf-join", field: "confJoin", title: "Челлендж «Божья гора»", verb: "зовёт в челлендж «Божья гора»",
       done: "Позвали ✓", full: "", btn: "Позвать", rule: () => "", sent: "Отправлено!", again: "Сегодня вы уже звали этого друга" }
   };
   const kindOf = (c) => (c && (c.kind === "invite" || c.kind === "conf" || c.kind === "confjoin") ? c.kind : "cheer");

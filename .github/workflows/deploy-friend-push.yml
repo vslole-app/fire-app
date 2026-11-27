@@ -1,0 +1,41 @@
+name: Deploy friend notifications
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-friend-push.yml
+      - firebase.json
+      - functions/**
+      - src/encouragement-config.js
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-friend-notifications
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prepare function
+        run: |
+          cp src/encouragement-config.js functions/encouragement-config.js
+          npm install --prefix functions --no-audit --no-fund
+      - name: Deploy Firestore notification trigger
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-friend-push.json"
+          trap 'rm -f "$RUNNER_TEMP/firebase-friend-push.json"' EXIT
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-friend-push.json" npx --yes firebase-tools@14 deploy --project fire-app-a69cc --only functions:notifyFriend --non-interactive

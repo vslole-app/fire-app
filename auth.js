@@ -2,7 +2,7 @@
 import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
-import { createFriendActions, pendingFriendRequests } from "./src/friend-actions.js?v=20261127-requests";
+import { createFriendActions, pendingFriendRequests, createCoalescedUpdate } from "./src/friend-actions.js?v=20261127-friends-fast";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
@@ -88,6 +88,15 @@ async function main() {
   /* ---------- friends ---------- */
   let me = null, myRef = null, myCode = "", myNick = "", myNameSet = false, friendUnsubs = {}, friendData = {}, myUnsub = null, myFriends = [], myFollowing = [], myFollowers = [], myDeclined = [], globeHide = false, activeProfileId = null;
   const serverVerifiedFriends = new Set();
+  let friendsLoaded = false, lastPathPeople = "";
+  const friendUpdates = createCoalescedUpdate(() => { if (!me) return; renderFriends(); if (globeList && window.OgonekGlobe && window.OgonekGlobe.isOpen()) refreshGlobeList(); publishFriendCards(); }, cb => setTimeout(cb, 50), clearTimeout);
+  function publishFriendCards() {
+    if (!myRef || !friendsLoaded || !fofChanged()) return;
+    const fof = {};
+    myFriends.forEach(u => { const f = friendData[u]; if (f) fof[u] = { n: String(f.name || "").slice(0, 60), p: f.photo || "" }; });
+    lastFof = JSON.stringify(fof);
+    F.setDoc(myRef, { fof }, { merge: true }).catch(e => console.warn(e));
+  }
 
   function randomCode() { let s = ""; const a = new Uint32Array(6); crypto.getRandomValues(a); a.forEach((n) => { s += CODE_ABC[n % CODE_ABC.length]; }); return s; }
 
@@ -283,29 +292,30 @@ async function main() {
           if (snap.metadata && !snap.metadata.fromCache) serverVerifiedFriends.add(uid);
           const before = friendData[uid];
           if (snap.exists()) friendData[uid] = snap.data(); else delete friendData[uid];
-          renderFriends();
+          friendUpdates.request();
           // Refresh an open friend's profile instead of leaving a frozen snapshot.
           if (activeProfileId === uid && JSON.stringify(before) !== JSON.stringify(friendData[uid]) && document.querySelector(".fmodal")) {
             openProfile(uid, false, true);
           }
-          if (globeList && window.OgonekGlobe && window.OgonekGlobe.isOpen()) refreshGlobeList();
-          if (fofChanged() && myRef) {
-            const fof = {};
-            myFriends.forEach((u) => { const f = friendData[u]; if (f) fof[u] = { n: String(f.name || "").slice(0, 60), p: f.photo || "" }; });
-            lastFof = JSON.stringify(fof);
-            F.setDoc(myRef, { fof }, { merge: true }).catch((e) => console.warn(e));
-          }
+          // Render and publish the friend cards once per burst of snapshots.
         },
-        (e) => { console.warn("Friend subscription failed", e); delete friendData[uid]; renderFriends(); if (globeList) refreshGlobeList(); });
+        (e) => { console.warn("Friend subscription failed", e); delete friendData[uid]; friendUpdates.request(); });
     });
-    renderFriends();
+    friendsLoaded = true;
+    friendUpdates.request();
   }
   const pendingRequests = () => pendingFriendRequests(myFollowers, myFriends, myDeclined, me && me.uid);
-  const cardCache = {};
+  const cardCache = Object.create(null), cardPending = Object.create(null);
   async function cardOf(uid) {
     if (cardCache[uid]) return cardCache[uid];
-    let c = {}; try { const sn = await F.getDoc(F.doc(db, "cards", uid)); c = sn.exists() ? sn.data() : {}; } catch (e) {}
-    return (cardCache[uid] = c);
+    if (cardPending[uid]) return cardPending[uid];
+    const request = (async () => {
+      try { const sn = await F.getDoc(F.doc(db, "cards", uid)); if (sn.exists()) return (cardCache[uid] = sn.data()); }
+      catch (e) {}
+      return {};
+    })();
+    cardPending[uid] = request;
+    try { return await request; } finally { if (cardPending[uid] === request) delete cardPending[uid]; }
   }
 
   const flameSvg = window.OgonekProgressVisual.flameSvg;
@@ -467,7 +477,7 @@ async function main() {
   function friendRow(d, isMe, uid) {
     const t = O().today(), row = el("div", "friend" + (isMe ? " me" : ""));
     const av = el("div", "favatar");
-    if (d.photo) { const img = document.createElement("img"); img.src = d.photo; img.alt = ""; img.referrerPolicy = "no-referrer"; img.width = 40; img.height = 40; av.append(img); }
+    if (d.photo) { const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.src = d.photo; img.alt = ""; img.referrerPolicy = "no-referrer"; img.width = 40; img.height = 40; av.append(img); }
     else av.textContent = (d.name || "?").trim().charAt(0).toUpperCase();
     const mid = el("div"); mid.style.minWidth = "0";
     mid.append(el("div", "fname", isMe ? "Вы" : (d.name || "Читатель")));
@@ -506,7 +516,7 @@ async function main() {
   }
   function avatarEl(name, photo, size, hq) {
     const av = el("div", "favatar");
-    if (photo) { const img = document.createElement("img"); img.src = photo; img.alt = ""; img.referrerPolicy = "no-referrer"; img.width = size; img.height = size; if (hq) img.dataset.hq = hq; av.append(img); }
+    if (photo) { const img = document.createElement("img"); img.loading = "lazy"; img.decoding = "async"; img.src = photo; img.alt = ""; img.referrerPolicy = "no-referrer"; img.width = size; img.height = size; if (hq) img.dataset.hq = hq; av.append(img); }
     else av.textContent = (name || "?").trim().charAt(0).toUpperCase();
     return av;
   }
@@ -782,39 +792,49 @@ async function main() {
   }
 
   let allOpen = false, allTab = "friends";
-  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "";
-  const stopReaders = () => {
+  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "", readerHasCache = false, readerSignature = "";
+  const stopReaders = (clear = false) => {
     if (readerUnsub) readerUnsub();
-    readerUnsub = null; readerRows = []; readerState = "idle";
+    readerUnsub = null;
+    if (clear) { readerRows = []; readerHasCache = false; readerSignature = ""; }
+    readerState = readerHasCache ? "cached" : "idle";
   };
   const startReaders = () => {
     if (!me || readerUnsub) return;
-    readerState = "loading";
+    readerState = readerHasCache ? "cached" : "loading";
     const uid = me.uid;
     const q = F.query(F.collection(db, "globe"), F.limit(1000));
     readerUnsub = F.onSnapshot(q, {includeMetadataChanges:true}, snap => {
       if (!allOpen || !me || me.uid !== uid) return;
+      // Do not replace a previously loaded list with an empty SDK cache.
+      if (snap.metadata.fromCache && readerHasCache && snap.empty) return;
       readerRows = snap.docs.map(doc => {
         const p = doc.data();
-        return {uid:doc.id,name:String(p.name || "Читатель"),photo:p.photo || "",streak:Number(p.streak)||0};
+        return {uid:doc.id,name:String(p.name || "Читатель"),photo:p.photo || ""};
       });
-      readerState = snap.metadata.fromCache ? "cached" : "ready";
+      readerHasCache = !snap.metadata.fromCache || readerRows.length > 0 || readerHasCache;
+      readerState = snap.metadata.fromCache ? (readerHasCache ? "cached" : "loading") : "ready";
       updateReaderList();
     }, e => {
       console.warn("Reader directory unavailable", e);
-      readerState = "error"; updateReaderList();
+      if (!allOpen || !me || me.uid !== uid) return;
+      readerState = readerHasCache ? "offline" : "error"; updateReaderList();
     });
   };
   function updateReaderList() {
     const host = document.querySelector(".fall .reader-directory");
     if (!host || allTab !== "readers" || !me) return;
     const count = host.querySelector(".reader-count"), list = host.querySelector(".reader-list");
-    const otherCount = readerRows.filter(p=>p.uid!==me.uid&&!myFriends.includes(p.uid)).length;
+    const friendSet = new Set(myFriends), followingSet = new Set(myFollowing), pendingSet = new Set(pendingRequests());
+    const signature = JSON.stringify([readerState, readerSearch, readerRows, myFriends, myFollowing, myFollowers, myDeclined]);
+    if (list.childNodes.length && list.dataset.signature === readerSignature && readerSignature === signature) return;
+    readerSignature = signature; list.dataset.signature = signature;
+    const otherCount = readerRows.filter(p=>p.uid!==me.uid&&!friendSet.has(p.uid)).length;
     count.textContent = readerState === "loading" ? "Загрузка читателей…" :
       readerState === "error" ? "Список недоступен" :
       (readerRows.length === 1000 ? "Не менее " : "") + readerRows.length + " · всего читателей";
     const tab = document.querySelector(".fall .reader-other-tab");
-    if(tab)tab.textContent="Другие"+(readerState==="ready"||readerState==="cached"?" · "+otherCount:"");
+    if(tab)tab.textContent="Другие"+(readerState==="ready"||readerState==="cached"||readerState==="offline"?" · "+otherCount:"");
     list.replaceChildren();
     if (readerState === "error") {
       list.append(el("p","hint","Не удалось загрузить список. Проверьте интернет."));
@@ -823,10 +843,15 @@ async function main() {
     }
     if (readerState === "loading") return;
     if (readerState === "cached") list.append(el("p","hint","Показан сохранённый список. Обновляем…"));
+    if (readerState === "offline") {
+      list.append(el("p","hint","Показан сохранённый список. Нет связи с сервером."));
+      const retry = el("button","btn","Обновить"); retry.type = "button";
+      retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();}); list.append(retry);
+    }
     const normalize = s => String(s || "").toLocaleLowerCase("ru").replace(/ё/g,"е").trim();
     const words = normalize(readerSearch).split(/\s+/).filter(Boolean);
     const people = readerRows.filter(p => p.uid !== me.uid &&
-      !myFriends.includes(p.uid) &&
+      !friendSet.has(p.uid) &&
       words.every(w => normalize(p.name).includes(w)))
       .sort((a,b)=>a.name.localeCompare(b.name,"ru"));
     for (const p of people) {
@@ -835,10 +860,10 @@ async function main() {
       profile.append(avatarEl(p.name,p.photo,40),el("span","reader-name",p.name));
       profile.addEventListener("click",()=>{closeAll();openProfile(p.uid);});
       row.append(profile);
-      if (myFriends.includes(p.uid)) row.append(el("span","reader-status friend","В друзьях"));
-      else if (myFollowing.includes(p.uid)) row.append(el("span","reader-status","Заявка отправлена"));
+      if (friendSet.has(p.uid)) row.append(el("span","reader-status friend","В друзьях"));
+      else if (followingSet.has(p.uid)) row.append(el("span","reader-status","Заявка отправлена"));
       else {
-        const pending = pendingRequests().includes(p.uid);
+        const pending = pendingSet.has(p.uid);
         const b = el("button","btn btn-xp reader-add",pending?"Принять":"Добавить"); b.type="button";
         b.addEventListener("click",async()=>{
           b.disabled=true;
@@ -910,7 +935,7 @@ async function main() {
     const head = el("div", "fhead"), h = el("h2", null, "Вместе в Слове");
     const x = el("button", "fclose", "×"); x.type = "button"; x.setAttribute("aria-label", "Закрыть"); x.addEventListener("click", closeAll);
     head.append(h, x);
-    const rows = sortedRows(), reqs = pendingRequests(), fols = followersOnly(), subs = subsOnly();
+    const reqs = pendingRequests();
     const tabs = el("div", "ftabs");
     [["friends", "Друзья", myFriends.length], ["readers", "Другие", null]].forEach(([k, t, n]) => {
       const b = el("button", "ftab" + (k==="readers"?" reader-other-tab":"") + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
@@ -920,9 +945,11 @@ async function main() {
     if (allTab === "readers") {
       list.append(readerDirectory());
     } else if (allTab === "friends") {
+      const rows = sortedRows();
       list.append(requestSection(reqs));
       rows.forEach((r) => list.append(friendRow(r.d, r.me, r.uid)));
-      if (rows.length < 2) list.append(el("p", "hint", "Пока нет друзей."));
+      if (!friendsLoaded || rows.length - 1 < myFriends.length) list.append(el("p","hint","Загружаем друзей…"));
+      else if (!myFriends.length) list.append(el("p", "hint", "Пока нет друзей."));
     }
     const top = el("div", "fallTop"); top.append(head, tabs); // шапка с крестиком и вкладками не уезжает при прокрутке
     sheet.append(top, list);
@@ -1142,6 +1169,7 @@ async function main() {
   let fsReaders = null, fsReadersAt = 0, fsTimer = 0;
   const fsNorm = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
   async function fsLoadReaders() {
+    if (readerHasCache && readerState === "ready") return readerRows;
     if (fsReaders && Date.now() - fsReadersAt < 300000) return fsReaders;
     const out = [];
     try {
@@ -1250,10 +1278,10 @@ async function main() {
     // на главной: я и два друга; все остальные — на отдельном экране «Все друзья и подписчики»
     let shown = 0;
     rows.forEach((r) => { if (r.me || shown < 2) { if (!r.me) shown++; box.append(friendRow(r.d, r.me, r.uid)); } });
-    const more = rows.length - 1 - shown, fols = followersOnly(), subs = subsOnly();
+    const more = myFriends.length - shown, fols = followersOnly(), subs = subsOnly();
     if (more > 0 || fols.length || subs.length) {
       const tg = el("button", "btn fmore"); tg.type = "button";
-      tg.textContent = more > 0 ? "Показать всех друзей (" + (rows.length - 1) + ")" : "Подписчики и подписки";
+      tg.textContent = more > 0 ? "Показать всех друзей (" + myFriends.length + ")" : "Подписчики и подписки";
       tg.addEventListener("click", () => openAll(more > 0 ? "friends" : fols.length ? "followers" : "subs"));
       box.append(tg);
     }
@@ -1268,8 +1296,11 @@ async function main() {
       } else drawAll();
     }
     // на пути — только друзья
-    O().setPathPeople(myFriends.filter((u) => friendData[u]).map((u) => ({ id: u, name: friendData[u].name, photo: friendData[u].photo, nt: friendData[u].ntNext || 0, ot: friendData[u].otNext || 0, conf: friendData[u].conf || null, notes: Array.isArray(friendData[u].notes) ? friendData[u].notes.slice(0, 10) : [], plan: friendData[u].plan || "spb", keys: friendData[u].keys, refs: (Array.isArray(friendData[u].keys) && friendData[u].keys.length ? friendData[u].keys : ["nt", "ot"]).map((k) => friendData[u][k + "Ref"] || null) })));
-    if (!myFriends.length) box.append(el("p", "hint", "Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку."));
+    const pathPeople = myFriends.filter((u) => friendData[u]).map((u) => ({ id: u, name: friendData[u].name, photo: friendData[u].photo, nt: friendData[u].ntNext || 0, ot: friendData[u].otNext || 0, conf: friendData[u].conf || null, notes: Array.isArray(friendData[u].notes) ? friendData[u].notes.slice(0, 10) : [], plan: friendData[u].plan || "spb", keys: friendData[u].keys, refs: (Array.isArray(friendData[u].keys) && friendData[u].keys.length ? friendData[u].keys : ["nt", "ot"]).map((k) => friendData[u][k + "Ref"] || null) }));
+    const pathSignature = JSON.stringify(pathPeople);
+    if (pathSignature !== lastPathPeople) { lastPathPeople = pathSignature; O().setPathPeople(pathPeople); }
+    if (!friendsLoaded || rows.length - 1 < myFriends.length) box.append(el("p","hint","Загружаем друзей…"));
+    else if (!myFriends.length) box.append(el("p", "hint", "Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку."));
     const bell = bellButton(); if (bell) box.append(bell);
   }
 
@@ -1667,6 +1698,8 @@ async function main() {
   A.onAuthStateChanged(auth, async (user) => {
     sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
     refreshPathCount();
+    friendUpdates.clear(); closeAll(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
+    friendsLoaded = false; lastPathPeople = ""; lastFof = "";
     Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = [];
     if (myUnsub) { myUnsub(); myUnsub = null; }
     if (inboxUnsub) { inboxUnsub(); inboxUnsub = null; } cheerQueue = []; seenCheers.clear();
@@ -1706,6 +1739,9 @@ async function main() {
 
     const ref = F.doc(db, "users", user.uid);
     myRef = F.doc(db, "profiles", user.uid);
+    // Fetch own social profile and reading state in parallel.
+    profileRecoveryBusy = true;
+    const startupProfile = ensureProfile(user).then(() => ({ok:true}), error => ({ok:false,error}));
     progressRecoveryBusy = true;
     try {
       // getDoc may return a stale cached snapshot after a failed connection.
@@ -1745,18 +1781,18 @@ async function main() {
     publishSummary();
 
     try {
-      profileRecoveryBusy = true;
-      try { await ensureProfile(user); if (!me || me.uid !== user.uid) return; profileReady = true; if (progressVerified && presencePending) publishSummary(true); }
+      try { const result = await startupProfile; if (!me || me.uid !== user.uid) return; if (!result.ok) throw result.error; profileReady = true; if (progressVerified && presencePending) publishSummary(true); }
       catch (e) { console.warn("Profile initialization failed; keep reading sync active", e); O().toast("Не удалось полностью загрузить профиль. Синхронизация продолжится при подключении."); }
       finally { profileRecoveryBusy = false; }
       if (!me || me.uid !== user.uid) return;
       if (!myNameSet && !window.__onbActive && !document.body.classList.contains("onbon")) await askName(user); // в «первом входе» имя спрашивается на своём шаге
       if (!me || me.uid !== user.uid) return;
-      if (user.email) await F.setDoc(F.doc(db, "emails", user.email.toLowerCase()), { uid: user.uid }).catch((e) => console.warn(e));
+      if (user.email) F.setDoc(F.doc(db, "emails", user.email.toLowerCase()), { uid: user.uid }).catch((e) => console.warn(e));
       $("myEmail").textContent = user.email || "";
       $("myId").textContent = user.uid;
       $("friendsCard").hidden = false; $("inviteCard").hidden = false;
       { const fe = $("friendsEmpty"); if (fe) fe.hidden = true; } // подсказка «Войдите через Google» не нужна
+      renderFriends();
       // Reconcile previously mismatched private reading and public presence.
       const uid = me.uid, revision = presenceRevision;
       publishSummary(true, O().getState()).then(ok => {

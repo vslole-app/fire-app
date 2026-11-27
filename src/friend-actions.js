@@ -55,3 +55,17 @@ export function createFriendActions({F,db,O,getContext}){
 
 return {addFriendUid,acceptRequest,declineRequest,removeFriend,unfollow};
 }
+
+export function createCoalescedUpdate(run, schedule, cancel) {
+  let ticket = null;
+  return {
+    request() {
+      if (ticket !== null) return;
+      ticket = schedule(() => { ticket = null; run(); });
+    },
+    clear() {
+      if (ticket !== null) cancel(ticket);
+      ticket = null;
+    }
+  };
+}

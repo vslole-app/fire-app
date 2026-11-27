@@ -5,7 +5,16 @@ globalThis.window={Ogonek:{planId:"spb",DAYS:364}};
 const {fLit,fProfileReadToday,fScheduleReadToday,fLiveAhead}=await load("friend-progress");
 const {createEncouragementConfig}=await load("encouragement-config");
 const {createEncouragementService}=await load("encouragement-service");
-const {createFriendActions,pendingFriendRequests}=await load("friend-actions");
+const {createFriendActions,pendingFriendRequests,createCoalescedUpdate}=await load("friend-actions");
+{
+  let calls=0, next=0; const jobs=new Map();
+  const batch=createCoalescedUpdate(()=>calls++, cb=>{jobs.set(++next,cb);return next;}, id=>jobs.delete(id));
+  for(let i=0;i<100;i++) batch.request();
+  assert.equal(jobs.size,1);
+  const [id,cb]=[...jobs][0];jobs.delete(id);cb();
+  assert.equal(calls,1);
+  batch.request();batch.clear();assert.equal(jobs.size,0);
+}
 // Incoming requests exclude current friends, declined users, duplicates and self.
 assert.deepEqual(pendingFriendRequests(["sonya"],["sonya"],[],"me"),[]);
 assert.deepEqual(pendingFriendRequests(["sonya","anna","anna","me"],["sonya"],[],"me"),["anna"]);

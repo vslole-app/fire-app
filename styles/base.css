@@ -1338,3 +1338,8 @@ body.globe-open .fmodal .fsheet.lib-compact{
 .reader-entry-text small{font-size:.75rem;color:var(--muted);line-height:1.25}
 .reader-new{flex:none;padding:3px 7px;border-radius:7px;background:#e9b949;color:#392600;font-size:.68rem;font-weight:800}
 .reader-entry-arrow{flex:none;color:var(--link);font-size:1.55rem;line-height:1}
+
+/* Stable friends loading: no pulsing or re-enter animation. */
+.friends-loading{min-height:76px;display:grid;place-items:center;text-align:center;margin:0;color:var(--muted);animation:none!important}
+#friendsList,.fall .friends,.fall .reader-list{min-width:0}
+.fall .fsheet{animation:none; height: min(92dvh, 900px);}

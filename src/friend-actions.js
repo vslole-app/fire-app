@@ -79,3 +79,8 @@ export function buildFriendPreviews(ids, profiles, previews) {
   }
   return out;
 }
+
+export function friendListPhase(loaded, ids, verified, unavailable, expired) {
+  if (!loaded) return expired ? "error" : "loading";
+  return expired || ids.every(uid=>verified.has(uid)||unavailable.has(uid)) ? "ready" : "loading";
+}

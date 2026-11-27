@@ -2,7 +2,7 @@
 import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
-import { createFriendActions, pendingFriendRequests, createCoalescedUpdate, buildFriendPreviews } from "./src/friend-actions.js?v=20261127-friends-preview";
+import { createFriendActions, pendingFriendRequests, createCoalescedUpdate, buildFriendPreviews, friendListPhase } from "./src/friend-actions.js?v=20261127-friends-stable";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
@@ -90,6 +90,43 @@ async function main() {
   const serverVerifiedFriends = new Set();
   let friendsLoaded = false, lastPathPeople = "", friendPreviews = Object.create(null);
   const friendUnavailable = new Set();
+  let friendLoadExpired = false, friendLoadTimer = null, friendOrder = [];
+  const requestCardsWaiting = new Set();
+  const requestCardsReady = new Set();
+  const friendPhase = () => friendListPhase(friendsLoaded, myFriends, serverVerifiedFriends, friendUnavailable, friendLoadExpired);
+  const rowMarkup = new WeakMap();
+  function syncStableRows(host, entries) {
+    const old = new Map(Array.from(host.children).map(node=>[node.dataset.stableKey,node]));
+    let cursor = host.firstElementChild;
+    for (const [key, fresh] of entries) {
+      const before = old.get(key), markup = fresh.outerHTML;
+      let node = fresh;
+      if (before && rowMarkup.get(before) === markup) node = before;
+      else {
+        fresh.dataset.stableKey = key; rowMarkup.set(fresh,markup);
+        if (before) {
+          // Preserve already decoded avatars when only the reading status changes.
+          const a = before.querySelector(".favatar"), b = fresh.querySelector(".favatar");
+          if (a && b && a.isEqualNode(b)) b.replaceWith(a);
+          before.replaceWith(fresh);
+          if (cursor === before) cursor = fresh;
+        }
+      }
+      if (node !== cursor) host.insertBefore(node,cursor);
+      cursor = node.nextElementSibling; old.delete(key);
+    }
+    for (const node of old.values()) node.remove();
+  }
+  function requestsReady(reqs) {
+    for (const uid of reqs) if (!requestCardsReady.has(uid) && !requestCardsWaiting.has(uid)) {
+      requestCardsWaiting.add(uid);
+      const viewer = me && me.uid;
+      cardOf(uid).finally(()=>{if(me && me.uid===viewer){requestCardsWaiting.delete(uid);requestCardsReady.add(uid);friendUpdates.request();}});
+    }
+    // A card may already be loading from search or the public directory.
+    for (const uid of reqs) if (!requestCardsReady.has(uid) && cardCache[uid]) requestCardsReady.add(uid);
+    return friendLoadExpired || reqs.every(uid=>requestCardsReady.has(uid));
+  }
   const friendCardIndex = () => buildFriendPreviews(myFriends, friendData, friendPreviews);
   const friendUpdates = createCoalescedUpdate(() => { if (!me) return; renderFriends(); if (globeList && window.OgonekGlobe && window.OgonekGlobe.isOpen()) refreshGlobeList(); publishFriendCards(); }, cb => setTimeout(cb, 50), clearTimeout);
   function publishFriendCards() {
@@ -817,7 +854,7 @@ async function main() {
     readerUnsub = F.onSnapshot(q, {includeMetadataChanges:true}, snap => {
       if (!allOpen || !me || me.uid !== uid) return;
       // Do not replace a previously loaded list with an empty SDK cache.
-      if (snap.metadata.fromCache && readerHasCache && snap.empty) return;
+      if (snap.metadata.fromCache) return; // initial reader list appears once the complete server snapshot arrives
       readerRows = snap.docs.map(doc => {
         const p = doc.data();
         return {uid:doc.id,name:String(p.name || "Читатель"),photo:p.photo || ""};
@@ -836,28 +873,24 @@ async function main() {
     if (!host || allTab !== "readers" || !me) return;
     const count = host.querySelector(".reader-count"), list = host.querySelector(".reader-list");
     const friendSet = new Set(myFriends), followingSet = new Set(myFollowing), pendingSet = new Set(pendingRequests());
-    const signature = JSON.stringify([readerState, readerSearch, readerRows, myFriends, myFollowing, myFollowers, myDeclined]);
-    if (list.childNodes.length && list.dataset.signature === readerSignature && readerSignature === signature) return;
-    readerSignature = signature; list.dataset.signature = signature;
+    const signature = JSON.stringify([readerState === "error" ? "error" : readerHasCache ? "list" : "loading", readerSearch, readerRows, myFriends, myFollowing, myFollowers, myDeclined]);
     const otherCount = readerRows.filter(p=>p.uid!==me.uid&&!friendSet.has(p.uid)).length;
     count.textContent = readerState === "loading" ? "Загрузка читателей…" :
       readerState === "error" ? "Список недоступен" :
+      readerState === "offline" ? "Список сохранён · нет связи" :
       (readerRows.length === 1000 ? "Не менее " : "") + readerRows.length + " · всего читателей";
     const tab = document.querySelector(".fall .reader-other-tab");
     if(tab)tab.textContent="Другие"+(readerState==="ready"||readerState==="cached"||readerState==="offline"?" · "+otherCount:"");
-    list.replaceChildren();
+    if (list.dataset.signature === signature) return;
+    list.dataset.signature = signature;
+    const entries = [];
     if (readerState === "error") {
+      list.replaceChildren();
       list.append(el("p","hint","Не удалось загрузить список. Проверьте интернет."));
       const retry=el("button","btn","Повторить");retry.type="button";
       retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();});list.append(retry);return;
     }
-    if (readerState === "loading") return;
-    if (readerState === "cached") list.append(el("p","hint","Показан сохранённый список. Обновляем…"));
-    if (readerState === "offline") {
-      list.append(el("p","hint","Показан сохранённый список. Нет связи с сервером."));
-      const retry = el("button","btn","Обновить"); retry.type = "button";
-      retry.addEventListener("click",()=>{stopReaders();startReaders();updateReaderList();}); list.append(retry);
-    }
+    if (!readerHasCache) { syncStableRows(list,[["loading",el("p","hint friends-loading","Загрузка читателей…")]]); return; }
     const normalize = s => String(s || "").toLocaleLowerCase("ru").replace(/ё/g,"е").trim();
     const words = normalize(readerSearch).split(/\s+/).filter(Boolean);
     const people = readerRows.filter(p => p.uid !== me.uid &&
@@ -884,20 +917,21 @@ async function main() {
         });
         row.append(b);
       }
-      list.append(row);
+      entries.push(["reader:"+p.uid,row]);
     }
     // Preserve access to existing incoming/outgoing requests, even when the
     // other person has chosen not to appear on the public globe.
     const visibleIds = new Set(readerRows.map(p=>p.uid));
     const known = [...new Set(myFollowers.concat(myFollowing))].filter(u=>u!==me.uid&&!myFriends.includes(u)&&!visibleIds.has(u));
     if(!words.length && known.length){
-      list.append(el("span","label","Заявки вне открытого списка"));
+      entries.push(["outside-title",el("span","label","Заявки вне открытого списка")]);
       for(const u of known){
         const outgoing=myFollowing.includes(u);
-        list.append(personRow(u,outgoing?null:"Принять",outgoing?null:acceptRequest,outgoing?"Заявка отправлена":"Входящая заявка"));
+        entries.push(["outside:"+u,personRow(u,outgoing?null:"Принять",outgoing?null:acceptRequest,outgoing?"Заявка отправлена":"Входящая заявка")]);
       }
     }
-    if (!people.length && (words.length || !known.length)) list.append(el("p","hint","Читатели не найдены."));
+    if (!people.length && (words.length || !known.length)) entries.push(["empty",el("p","hint","Читатели не найдены.")]);
+    syncStableRows(list,entries);
   }
   function readerDirectory() {
     const host=el("div","reader-directory");
@@ -915,14 +949,23 @@ async function main() {
       const d = friendData[u], preview = friendPreviews[u] || {};
       return {d:d || {name:preview.n || "Читатель",photo:preview.p || ""}, me:false, uid:u, pending:!d || !serverVerifiedFriends.has(u)};
     }));
-    return rows.sort((a,b) => Number(!!a.pending)-Number(!!b.pending) || (b.d.streak || 0)-(a.d.streak || 0));
+    rows.sort((a,b) => Number(!!a.pending)-Number(!!b.pending) || (b.d.streak || 0)-(a.d.streak || 0));
+    if (friendPhase() === "ready") {
+      const active = new Set(rows.map(r=>r.uid));
+      friendOrder = friendOrder.filter(uid=>active.has(uid));
+      const seen = new Set(friendOrder);
+      for(const r of rows) if(!seen.has(r.uid)){friendOrder.push(r.uid);seen.add(r.uid);}
+      const rank = new Map(friendOrder.map((uid,i)=>[uid,i]));
+      rows.sort((a,b)=>rank.get(a.uid)-rank.get(b.uid));
+    }
+    return rows;
   }
   function friendListRow(r) {
     if (!r.pending) return friendRow(r.d, r.me, r.uid);
     const row = el("div","friend"), mid = el("div");
     mid.style.minWidth = "0";
     mid.append(el("div","fname",r.d.name || "Читатель"),
-      el("div","hint",friendUnavailable.has(r.uid) ? "Данные пока недоступны" : "Обновляем чтение…"));
+      el("div","hint",friendUnavailable.has(r.uid) || friendLoadExpired ? "Данные пока недоступны" : "Обновляем чтение…"));
     row.append(avatarEl(r.d.name,r.d.photo,40),mid);
     row.tabIndex = 0; row.setAttribute("role","button"); row.title="Открыть профиль";
     row.addEventListener("click",()=>openProfile(r.uid));
@@ -956,25 +999,28 @@ async function main() {
   function escAll(e) { if (e.key === "Escape") closeAll(); }
   function drawAll() {
     const sheet = document.querySelector(".fall .fsheet"); if (!sheet) { allOpen = false; return; }
-    sheet.textContent = "";
+    if (sheet.dataset.tab === allTab && sheet.querySelector(".fallTop")) {
+      const tab = sheet.querySelector(".friend-count-tab");
+      if(tab) tab.textContent = "Друзья · " + myFriends.length;
+      if(allTab === "friends") renderFriendPanel(sheet.querySelector(".friends"),true);
+      else updateReaderList();
+      return;
+    }
+    sheet.dataset.tab = allTab;
+    sheet.replaceChildren();
     const head = el("div", "fhead"), h = el("h2", null, "Вместе в Слове");
     const x = el("button", "fclose", "×"); x.type = "button"; x.setAttribute("aria-label", "Закрыть"); x.addEventListener("click", closeAll);
     head.append(h, x);
-    const reqs = pendingRequests();
     const tabs = el("div", "ftabs");
     [["friends", "Друзья", myFriends.length], ["readers", "Другие", null]].forEach(([k, t, n]) => {
-      const b = el("button", "ftab" + (k==="readers"?" reader-other-tab":"") + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
-      b.addEventListener("click", () => { allTab = k; drawAll(); }); tabs.append(b);
+      const b = el("button", "ftab" + (k==="readers"?" reader-other-tab":" friend-count-tab") + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
+      b.addEventListener("click", () => { if(allTab === k) return; allTab = k; drawAll(); }); tabs.append(b);
     });
     const list = el("div", "friends");
     if (allTab === "readers") {
       list.append(readerDirectory());
     } else if (allTab === "friends") {
-      const rows = sortedRows();
-      list.append(requestSection(reqs));
-      rows.forEach((r) => list.append(friendListRow(r)));
-      if (!friendsLoaded) list.append(el("p","hint","Загружаем друзей…"));
-      else if (!myFriends.length) list.append(el("p", "hint", "Пока нет друзей."));
+      renderFriendPanel(list,true);
     }
     const top = el("div", "fallTop"); top.append(head, tabs); // шапка с крестиком и вкладками не уезжает при прокрутке
     sheet.append(top, list);
@@ -1282,7 +1328,7 @@ async function main() {
         row.append(av, nm);
         row.style.cursor = "pointer"; row.title = "Открыть профиль";
         row.addEventListener("click", (e) => { if (!e.target.closest("button")) openProfile(u); });
-        cardOf(u).then((c) => { nm.textContent = c.name || "Читатель"; av.replaceWith(avatarEl(c.name, c.photo, 34)); });
+        const c = cardCache[u] || friendData[u] || {}; nm.textContent = c.name || "Читатель"; av.replaceWith(avatarEl(c.name, c.photo, 34));
         const ok = el("button", "btn btn-xp", "Принять"); ok.type = "button";
         ok.addEventListener("click", () => { ok.disabled = true; acceptRequest(u); });
         const no = el("button", "btn", "Отклонить"); no.type = "button";
@@ -1292,24 +1338,44 @@ async function main() {
     return rq;
   }
 
+  function renderFriendPanel(host, full) {
+    if (!host || !me) return;
+    const reqs = pendingRequests(), cardsReady = requestsReady(reqs), phase = friendPhase();
+    if ((phase !== "ready" || !cardsReady) && !host.dataset.friendReady) {
+      const msg = phase === "error" ? "Не удалось загрузить друзей. Проверьте интернет." : "Загрузка друзей…";
+      host.setAttribute("aria-busy",phase === "error" ? "false" : "true");
+      syncStableRows(host,[["loading",el("p","hint friends-loading",msg)]]);
+      return;
+    }
+    host.dataset.friendReady = "1"; host.setAttribute("aria-busy","false");
+    const entries = [];
+    if (full || reqs.length) entries.push(["requests",requestSection(reqs)]);
+    const rows = sortedRows();
+    // Keep the existing order; incoming data changes individual cards, not the whole list.
+    let shown = 0;
+    for(const r of rows) {
+      if(!full && !r.me && shown >= 2) continue;
+      if(!r.me) shown++;
+      entries.push(["friend:"+r.uid,friendListRow(r)]);
+    }
+    if (!full) {
+      const more = myFriends.length - shown, fols = followersOnly(), subs = subsOnly();
+      if (more > 0 || fols.length || subs.length) {
+        const tg = el("button","btn fmore"); tg.type = "button";
+        tg.textContent = more > 0 ? "Показать всех друзей ("+myFriends.length+")" : "Подписчики и подписки";
+        tg.addEventListener("click",()=>openAll(more > 0 ? "friends" : fols.length ? "followers" : "subs"));
+        entries.push(["more",tg]);
+      }
+    }
+    if(!myFriends.length) entries.push(["empty",el("p","hint",full?"Пока нет друзей.":"Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку.")]);
+    if(!full){const bell = bellButton(); if(bell) entries.push(["bell",bell]);}
+    syncStableRows(host,entries);
+  }
   function renderFriends() {
     if (!me) return;
     try { fsSetup(); } catch (e) { console.warn(e); }
     $("myCode").textContent = myCode || "…";
-    const box = $("friendsList"); box.textContent = "";
-    const reqs = pendingRequests();
-    if (reqs.length) box.append(requestSection(reqs));
-    const rows = sortedRows();
-    // на главной: я и два друга; все остальные — на отдельном экране «Все друзья и подписчики»
-    let shown = 0;
-    rows.forEach((r) => { if (r.me || shown < 2) { if (!r.me) shown++; box.append(friendListRow(r)); } });
-    const more = myFriends.length - shown, fols = followersOnly(), subs = subsOnly();
-    if (more > 0 || fols.length || subs.length) {
-      const tg = el("button", "btn fmore"); tg.type = "button";
-      tg.textContent = more > 0 ? "Показать всех друзей (" + myFriends.length + ")" : "Подписчики и подписки";
-      tg.addEventListener("click", () => openAll(more > 0 ? "friends" : fols.length ? "followers" : "subs"));
-      box.append(tg);
-    }
+    renderFriendPanel($("friendsList"),false);
     $("friendsAll").hidden = false;
     const newReaderBadge=$("friendsAll").querySelector(".reader-new");
     if(newReaderBadge)newReaderBadge.hidden=!!lsGet("vslove-readers-seen:"+me.uid);
@@ -1324,9 +1390,6 @@ async function main() {
     const pathPeople = myFriends.filter((u) => friendData[u]).map((u) => ({ id: u, name: friendData[u].name, photo: friendData[u].photo, nt: friendData[u].ntNext || 0, ot: friendData[u].otNext || 0, conf: friendData[u].conf || null, notes: Array.isArray(friendData[u].notes) ? friendData[u].notes.slice(0, 10) : [], plan: friendData[u].plan || "spb", keys: friendData[u].keys, refs: (Array.isArray(friendData[u].keys) && friendData[u].keys.length ? friendData[u].keys : ["nt", "ot"]).map((k) => friendData[u][k + "Ref"] || null) }));
     const pathSignature = JSON.stringify(pathPeople);
     if (pathSignature !== lastPathPeople) { lastPathPeople = pathSignature; O().setPathPeople(pathPeople); }
-    if (!friendsLoaded) box.append(el("p","hint","Загружаем друзей…"));
-    else if (!myFriends.length) box.append(el("p", "hint", "Пока нет друзей. Отправьте другу приглашение или введите его код — он получит заявку."));
-    const bell = bellButton(); if (bell) box.append(bell);
   }
 
   $("addFriend").addEventListener("click", () => addFriendByCode($("friendCode").value));
@@ -1725,6 +1788,9 @@ async function main() {
     refreshPathCount();
     friendUpdates.clear(); closeAll(); stopReaders(true); fsReaders = null; fsReadersAt = 0;
     friendsLoaded = false; lastPathPeople = ""; lastFof = ""; friendPreviews = Object.create(null); friendUnavailable.clear();
+    clearTimeout(friendLoadTimer); friendLoadExpired = false; friendOrder = [];
+    requestCardsReady.clear(); requestCardsWaiting.clear();
+    const friendHost = $("friendsList"); friendHost.replaceChildren(); delete friendHost.dataset.friendReady;
     myProfile = {}; myCode = ""; myNick = ""; myNameSet = false;
     Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = [];
     if (myUnsub) { myUnsub(); myUnsub = null; }
@@ -1769,6 +1835,7 @@ async function main() {
     $("friendsCard").hidden = false; $("inviteCard").hidden = false;
     { const fe = $("friendsEmpty"); if (fe) fe.hidden = true; }
     renderFriends();
+    friendLoadTimer = setTimeout(()=>{if(me && me.uid===user.uid){friendLoadExpired=true;renderFriends();}},12000);
     // Fetch own social profile and reading state in parallel.
     profileRecoveryBusy = true;
     const startupProfile = ensureProfile(user).then(() => ({ok:true}), error => ({ok:false,error}));

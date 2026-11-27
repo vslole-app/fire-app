@@ -717,6 +717,17 @@
       CONT.forEach(cont => {
         const land=new Path2D();
         cont.vs.forEach(vs=>addPath(land,vs,true));
+        // В плоской проекции у Бытия и Матфея остаются незакрашенные
+        // северные участки. Подложка только для этих двух материков:
+        // остальные области книг рисуются поверх неё прежними цветами.
+        const fallbackBook = cont.a === 0 || cont.a === 39 ? cont.bk[0] : null;
+        if (fallbackBook) {
+          const light=.78+.22*Math.max(0,dot(fallbackBook.c,L));
+          ctx.fillStyle=selected?.kind==="bible" && selected.v===fallbackBook.c
+            ? "#ffd276" : "rgb("+fallbackBook.col.map(v=>Math.round(v*light)).join(",")+")";
+          ctx.fill(land);
+          landHits.push({book:fallbackBook,area:land,coast:land});
+        }
         ctx.save();ctx.clip(land);
         cont.bk.forEach(book=>{
           if(!book.poly.length)return;

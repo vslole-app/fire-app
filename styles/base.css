@@ -1329,3 +1329,12 @@ body.globe-open .fmodal .fsheet.lib-compact{
 .reader-status.friend{color:var(--ok)}
 .reader-add{flex:none;font-size:.76rem;padding:7px 9px}
 .fall .fallTop>.ftabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* Заметный вход в новый каталог, без дополнительных вкладок. */
+#friendsAll.reader-entry{width:100%;box-sizing:border-box;display:flex;align-items:center;gap:9px;margin:4px 0 12px;padding:12px 13px;border:1px solid var(--link);border-radius:14px;background:var(--bg);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
+#friendsAll[hidden],.reader-new[hidden]{display:none!important}
+.reader-entry-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.reader-entry-text b{font-family:var(--display);font-size:1.05rem;color:var(--link)}
+.reader-entry-text small{font-size:.75rem;color:var(--muted);line-height:1.25}
+.reader-new{flex:none;padding:3px 7px;border-radius:7px;background:#e9b949;color:#392600;font-size:.68rem;font-weight:800}
+.reader-entry-arrow{flex:none;color:var(--link);font-size:1.55rem;line-height:1}

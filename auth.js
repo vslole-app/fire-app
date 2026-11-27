@@ -782,7 +782,7 @@ async function main() {
   }
 
   let allOpen = false, allTab = "friends";
-  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "", readerFilter = "all";
+  let readerUnsub = null, readerRows = [], readerState = "idle", readerSearch = "";
   const stopReaders = () => {
     if (readerUnsub) readerUnsub();
     readerUnsub = null; readerRows = []; readerState = "idle";
@@ -809,8 +809,12 @@ async function main() {
     const host = document.querySelector(".fall .reader-directory");
     if (!host || allTab !== "readers" || !me) return;
     const count = host.querySelector(".reader-count"), list = host.querySelector(".reader-list");
+    const otherCount = readerRows.filter(p=>p.uid!==me.uid&&!myFriends.includes(p.uid)).length;
     count.textContent = readerState === "loading" ? "Загрузка читателей…" :
-      (readerRows.length === 1000 ? "Не менее " : "") + readerRows.length + " · читателей в открытом списке";
+      readerState === "error" ? "Список недоступен" :
+      (readerRows.length === 1000 ? "Не менее " : "") + readerRows.length + " · всего читателей";
+    const tab = document.querySelector(".fall .reader-other-tab");
+    if(tab)tab.textContent="Другие"+(readerState==="ready"||readerState==="cached"?" · "+otherCount:"");
     list.replaceChildren();
     if (readerState === "error") {
       list.append(el("p","hint","Не удалось загрузить список. Проверьте интернет."));
@@ -822,7 +826,7 @@ async function main() {
     const normalize = s => String(s || "").toLocaleLowerCase("ru").replace(/ё/g,"е").trim();
     const words = normalize(readerSearch).split(/\s+/).filter(Boolean);
     const people = readerRows.filter(p => p.uid !== me.uid &&
-      (readerFilter !== "new" || (!myFriends.includes(p.uid) && !myFollowing.includes(p.uid))) &&
+      !myFriends.includes(p.uid) &&
       words.every(w => normalize(p.name).includes(w)))
       .sort((a,b)=>a.name.localeCompare(b.name,"ru"));
     for (const p of people) {
@@ -847,7 +851,18 @@ async function main() {
       }
       list.append(row);
     }
-    if (!people.length) list.append(el("p","hint","Читатели не найдены."));
+    // Preserve access to existing incoming/outgoing requests, even when the
+    // other person has chosen not to appear on the public globe.
+    const visibleIds = new Set(readerRows.map(p=>p.uid));
+    const known = [...new Set(myFollowers.concat(myFollowing))].filter(u=>u!==me.uid&&!myFriends.includes(u)&&!visibleIds.has(u));
+    if(!words.length && known.length){
+      list.append(el("span","label","Заявки вне открытого списка"));
+      for(const u of known){
+        const outgoing=myFollowing.includes(u);
+        list.append(personRow(u,outgoing?null:"Принять",outgoing?null:acceptRequest,outgoing?"Заявка отправлена":"Входящая заявка"));
+      }
+    }
+    if (!people.length && (words.length || !known.length)) list.append(el("p","hint","Читатели не найдены."));
   }
   function readerDirectory() {
     const host=el("div","reader-directory");
@@ -856,13 +871,7 @@ async function main() {
     const input=el("input","reader-search");input.type="search";input.placeholder="Найти по имени";input.value=readerSearch;
     input.setAttribute("aria-label","Найти читателя по имени");
     input.addEventListener("input",()=>{readerSearch=input.value;updateReaderList();});
-    const filters=el("div","ftabs reader-filters");
-    [["all","Все читатели"],["new","Не в друзьях"]].forEach(([key,label])=>{
-      const b=el("button","ftab"+(readerFilter===key?" on":""),label);b.type="button";
-      b.addEventListener("click",()=>{readerFilter=key;for(const child of filters.children)child.classList.toggle("on",child===b);updateReaderList();});
-      filters.append(b);
-    });
-    host.append(metrics,input,filters,el("div","reader-list"));
+    host.append(metrics,input,el("div","reader-list"));
     return host;
   }
   function sortedRows() {
@@ -885,8 +894,8 @@ async function main() {
   }
   // отдельный экран: все друзья, подписчики и подписки (удобно, когда друзей много)
   function openAll(tab) {
-    closeAll(); closeProfile(); allTab = tab || allTab; allOpen = true;
-    readerSearch = ""; readerFilter = "all";
+    closeAll(); closeProfile(); allTab = tab === "friends" ? "friends" : "readers"; allOpen = true;
+    readerSearch = "";
     const modal = el("div", "fmodal fall"), sheet = el("div", "fsheet");
     sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true");
     modal.addEventListener("click", (e) => { if (e.target === modal) closeAll(); });
@@ -903,8 +912,8 @@ async function main() {
     head.append(h, x);
     const rows = sortedRows(), reqs = pendingRequests(), fols = followersOnly(), subs = subsOnly();
     const tabs = el("div", "ftabs");
-    [["readers", "Читатели", null], ["friends", "Друзья", myFriends.length], ["followers", "Входящие", fols.length + reqs.length], ["subs", "Исходящие", subs.length]].forEach(([k, t, n]) => {
-      const b = el("button", "ftab" + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
+    [["friends", "Друзья", myFriends.length], ["readers", "Другие", null]].forEach(([k, t, n]) => {
+      const b = el("button", "ftab" + (k==="readers"?" reader-other-tab":"") + (allTab === k ? " on" : ""), t + (n === null ? "" : " · " + n)); b.type = "button";
       b.addEventListener("click", () => { allTab = k; drawAll(); }); tabs.append(b);
     });
     const list = el("div", "friends");
@@ -913,19 +922,17 @@ async function main() {
     } else if (allTab === "friends") {
       rows.forEach((r) => list.append(friendRow(r.d, r.me, r.uid)));
       if (rows.length < 2) list.append(el("p", "hint", "Пока нет друзей."));
-    } else if (allTab === "followers") {
-      reqs.forEach((u) => list.append(personRow(u, "Принять", acceptRequest, "новая заявка")));
-      fols.forEach((u) => list.append(personRow(u, "Добавить в друзья", acceptRequest)));
-      if (!reqs.length && !fols.length) list.append(el("p", "hint", "Пока нет подписчиков. Подписчик — тот, кто отправил вам заявку, а вы её не приняли."));
-    } else {
-      subs.forEach((u) => list.append(personRow(u, null, null, "заявка отправлена")));
-      if (!subs.length) list.append(el("p", "hint", "Вы ни на кого не подписаны. Подписка — это ваша заявка, которую ещё не приняли."));
     }
     const top = el("div", "fallTop"); top.append(head, tabs); // шапка с крестиком и вкладками не уезжает при прокрутке
     sheet.append(top, list);
     if (allTab === "readers") { startReaders(); updateReaderList(); }
   }
-  $("friendsAll").addEventListener("click", () => openAll("readers"));
+  $("friendsAll").addEventListener("click", () => {
+    if(!me)return;
+    lsSet("vslove-readers-seen:"+me.uid,"1");
+    const badge=$("friendsAll").querySelector(".reader-new");if(badge)badge.hidden=true;
+    openAll("readers");
+  });
 
   /* ---------- глобус читателей ---------- */
   // globe/{uid}: имя, фото, книга, которую человек читает сейчас, огонёк и серия. Видят все вошедшие; можно скрыть себя.
@@ -1248,6 +1255,8 @@ async function main() {
       box.append(tg);
     }
     $("friendsAll").hidden = false;
+    const newReaderBadge=$("friendsAll").querySelector(".reader-new");
+    if(newReaderBadge)newReaderBadge.hidden=!!lsGet("vslove-readers-seen:"+me.uid);
     if (allOpen) {
       if (allTab === "readers" && document.querySelector(".reader-directory")) {
         const metric=document.querySelector(".reader-metrics > span");

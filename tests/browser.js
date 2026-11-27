@@ -279,7 +279,7 @@
     equal(globe.schedulePosition(app.summary().globeSchedule, app.today()).b, globe.bookIndex("Мф."));
   });
 
-  await run("Расписание жизненной группы можно сделать главным", () => {
+  await run("Расписание группы можно сделать главным", () => {
     window.ogPlanAdd({
       id: "fire-TEST01", name: "Чтение группы", books: ["Иуд."], start: app.today(),
       by: "chapters", amount: 1,

@@ -15,7 +15,7 @@ function fromDoc(d){
   const prev=FIRES.find(f=>f.code===d.code)||{};
   const L=d.live&&(d.live.in||[]).length&&Date.now()-d.live.t<90*6e4?{by:idOf(d.live.by),t:d.live.t,in:(d.live.in||[]).map(idOf)}:null;
   const ch=fresh&&d.cheers&&d.cheers[MYUID];
-  return {code:d.code,name:d.name||"Жизненная группа",owner:idOf(d.owner),plan:d.plan||{kind:"church"},size:d.size||4,meet:d.meet||null,link:d.link||"",
+  return {code:d.code,name:d.name||"Группа",owner:idOf(d.owner),plan:d.plan||{kind:"church"},size:d.size||4,meet:d.meet||null,link:d.link||"",
     created:d.created||t,streak:0,made:true,live:L,
     members:(d.members||[]).map(u=>({id:idOf(u),st:"in",read:u===MYUID?null:(reads[u]||null),react:{fire:[],pray:[]}})),
     verses:Object.fromEntries(Object.entries(vs).filter(([u])=>u!==MYUID)),
@@ -201,7 +201,7 @@ function incoming(F,by){
   n.innerHTML=`<span class="rgpico">${miniFlame(true)}</span><div><b>В Слове · ${esc(F.name)}</b><span>📞 ${esc(who(by).name)} зовёт читать вместе — присоединяйтесь</span></div><small>сейчас</small>`;
   document.body.appendChild(n);setTimeout(()=>n.classList.add("in"),30);
   const open=()=>{n.remove();
-    sheet("",`<div class="rgincall">${av(by)}<h3>${esc(who(by).name)} зовёт читать вместе</h3><p>Жизненная группа «${esc(F.name)}»${T.refs.length?" · сегодня "+esc(T.refs.join(", ")):""}</p>
+    sheet("",`<div class="rgincall">${av(by)}<h3>${esc(who(by).name)} зовёт читать вместе</h3><p>Группа «${esc(F.name)}»${T.refs.length?" · сегодня "+esc(T.refs.join(", ")):""}</p>
       <div class="rgcallav big">${(F.live&&F.live.in||[by]).map(id=>av(id)).join("")}</div><small>${(F.live&&F.live.in||[by]).length} уже в звонке · ${esc(svcName(F.link))}</small></div>
       <a class="rgbtn rggo" href="${esc(url)}" target="_blank" rel="noopener" data-join>📞 Войти в звонок</a>
       <button class="rgbtn sec" type="button" data-later>Не сейчас</button>`,(el,close)=>{
@@ -320,7 +320,7 @@ function cardHtml(){
 
   maybeCelebrate(all,streak);
   return `
-   <div class="rgkind">Жизненная группа</div>
+   <div class="rgkind">Группа</div>
    <div class="rgtop2">${campfire(n,Math.max(tot,1))}<div class="rgttl"><h2>${esc(G.name)}</h2><div class="rgbookln">📖 ${esc(planBook(G.plan))}</div></div>${callHtml()}</div>
    ${callNote()}
    ${G.inbox&&G.inbox.length&&!readOf(G.members.find(m=>m.id==="me")||{id:"me"})?G.inbox.map(x=>`<div class="rgcheerln">💬 <b>${esc(who(x.from).name)}:</b> «${esc(x.t)}»</div>`).join(""):""}
@@ -414,7 +414,7 @@ function invite(){
     });
     const url=location.origin+location.pathname+"?group="+F.code, gname=F.name;
     el.querySelector("[data-copy]").onclick=e=>{try{navigator.clipboard.writeText(url).catch(()=>{})}catch(_){}e.target.textContent="✓ Ссылка скопирована"};
-    const sh=el.querySelector("[data-share]");if(sh)sh.onclick=()=>{try{navigator.share({title:"В Слове · "+gname,text:"Читаем Библию вместе в жизненной группе «"+gname+"». Присоединяйся:",url}).catch(()=>{})}catch(_){}};
+    const sh=el.querySelector("[data-share]");if(sh)sh.onclick=()=>{try{navigator.share({title:"В Слове · "+gname,text:"Читаем Библию вместе в группе «"+gname+"». Присоединяйся:",url}).catch(()=>{})}catch(_){}};
     el.querySelector("[data-done]").onclick=close;
   });
 }
@@ -429,7 +429,7 @@ function setup(edit){
   let meet=E&&E.meet?{days:(E.meet.days||[]).slice(),time:E.meet.time||"21:00"}:null;
   let link=E&&E.link||"";
   const msName=d=>{const t=d&&bookInfo(d.ms);return t?t.t:"Книга служения"};
-  sheet(edit?"Настроить группу":"Новая жизненная группа",`
+  sheet(edit?"Настроить группу":"Новая группа",`
     <div class="rglbl">Что читаем</div>
     <div class="rgkind two">${[["bible","Библия"],["ms","Книга служения"]].map(([k,t])=>`<button type="button" data-k="${k}" class="${kind===k?"on":""}">${t}</button>`).join("")}</div>
     <div data-what></div>
@@ -474,7 +474,7 @@ function setup(edit){
       if(!d){W.innerHTML=`<button class="rgopt" type="button" data-ed><span>${kind==="ms"?"📖":"📜"}</span><span><b>${kind==="ms"?"Выбрать книгу служения":"Выбрать книги Библии"}</b><small>Откроется окно, как при создании расписания</small></span><em>›</em></button>`;mk.disabled=true;return}
       const p=window.ogPlanPreview?window.ogPlanPreview(d):null;
       const sel=`<div class="rgprev rgsel"><b>${esc(planDesc({kind,def:d}))}</b>${p?`<span>${esc(p.sum)}</span><span>Первый день: ${esc(p.first)}</span>`:""}<button class="rgre" type="button" data-ed>Изменить</button></div>`;
-      const nameBox=`<label class="rglbl" for="rgName">Название жизненной группы</label><div class="rgname" data-nbox><input class="rginput" id="rgName" maxlength="30" placeholder="Например: Братья с Петроградки" value="${esc(bname)}"><small data-nh>Придумайте сами — его увидят друзья. Что читаете, будет написано ниже названия.</small></div>`;
+      const nameBox=`<label class="rglbl" for="rgName">Название группы</label><div class="rgname" data-nbox><input class="rginput" id="rgName" maxlength="30" placeholder="Например: Братья с Петроградки" value="${esc(bname)}"><small data-nh>Придумайте сами — его увидят друзья. Что читаете, будет написано ниже названия.</small></div>`;
       W.innerHTML=sel+nameBox;mk.disabled=false;
       const nm=W.querySelector("#rgName");if(nm)nm.oninput=()=>{bname=nm.value;if(nm.value.trim()){W.querySelector("[data-nbox]").classList.remove("need");W.querySelector("[data-nh]").textContent="Придумайте сами — его увидят друзья. Что читаете, будет написано ниже названия."}};
     }
@@ -498,7 +498,7 @@ function setup(edit){
         try{window.ogPlanAdd(G.plan.def)}catch(_){}
         store();close();render();try{window.ogRefresh&&window.ogRefresh()}catch(_){}try{O().toast(changed?"Сохранено — у друзей тоже обновится":"Сохранено")}catch(e){}return}
       if(!DEMO){
-        if(!NET){O().toast("Войдите через Google, чтобы создать жизненную группу");return}
+        if(!NET){O().toast("Войдите через Google, чтобы создать группу");return}
         mk.disabled=true;mk.textContent="Создаём…";
         NET.create(Object.assign({name,size,meet:meet&&meet.days.length?meet:null,link,plan:{kind,def:Object.assign({},d,{id:""})},created:today()},(window.ogGender&&window.ogGender())?{g:window.ogGender()}:{})).then(code=>{
           const dd=Object.assign({},d,{id:"fire-"+code});NET.update(code,{"plan.def.id":dd.id}).catch(()=>{});
@@ -555,7 +555,7 @@ function joinReal(code,inv){
     if(d.g&&d.g!==mg){drop();O().toast("Эта группа недоступна");return}
     Object.assign(NAMES,d.names||{});Object.assign(PHOTOS,d.photos||{});
     const full=(d.members||[]).length>=(d.size||4),k=G;G={plan:d.plan,code:d.code};const pv=d.plan&&d.plan.def&&window.ogPlanPreview?window.ogPlanPreview(Object.assign({},d.plan.def,{id:"fire-"+code})):null;G=k;
-    sheet("Приглашение в жизненную группу",`
+    sheet("Приглашение в группу",`
       <div class="rginvite">${campfire((d.members||[]).length,(d.size||4))}<h3>${esc(d.name)}</h3><p>${esc(inv&&inv.name?String(inv.name).split(" ")[0]:who(d.owner).name)} зовёт вас читать вместе</p></div>
       <div class="rgplan"><small>Читаем</small><b>${esc(planDesc(d.plan))}</b>${pv?`<small>${esc(pv.sum)}</small>`:""}</div>
       <div class="rgpeople2">${(d.members||[]).map(u=>`<div class="rgp">${av(u)}<span>${esc(who(u).name)}</span></div>`).join("")}</div>
@@ -578,7 +578,7 @@ function join(){
   const inv={name:"Вечерний огонь",owner:"tolya",plan:{kind:"bible",def},size:4,code,created:today(),streak:0,made:true,
     members:[{id:"tolya",st:"in",read:"07:12",react:{fire:[],pray:[]}},{id:"lada",st:"in",read:"08:40",react:{fire:["tolya"],pray:[]}}],inbox:[],cheered:{},cel:"",day:today(),myReact:{}};
   const pv=window.ogPlanPreview?window.ogPlanPreview(def):null;
-  sheet("Приглашение в жизненную группу",`
+  sheet("Приглашение в группу",`
     <div class="rginvite">${campfire(2,3)}<h3>${esc(inv.name)}</h3><p>${esc(who("tolya").name)} зовёт вас читать вместе</p></div>
     <div class="rgplan"><small>Читаем</small><b>${esc(planDesc(inv.plan))}</b>${pv?`<small>${esc(pv.sum)}</small>`:""}</div>
     <div class="rgpeople2">${inv.members.map(m=>`<div class="rgp">${av(m.id)}<span>${esc(who(m.id).name)}</span></div>`).join("")}<div class="rgp"><span class="rgseat" style="border-color:var(--flame);color:var(--flame)">Я</span><span>Вы</span></div><div class="rgp"><span class="rgseat">·</span><span style="color:var(--muted)">место</span></div></div>
@@ -638,7 +638,7 @@ $c.addEventListener("click",e=>{
 /* вход из вкладки «Расписания» */
 window.ogFireList=()=>FIRES.map(f=>{G=f;return {code:f.code,name:f.name,n:joined().length,inv:invited().length,size:MAX(),own:f.owner==="me",what:planDesc(f.plan)}});
 window.ogFireMenu=code=>{if(pick(code))menu()};
-window.ogFireNew=()=>{if(!DEMO&&!NET){O().toast("Войдите через Google (кнопка вверху), чтобы создать жизненную группу");const b=document.getElementById("loginTop");if(b&&!b.hidden)b.click();return}setup(false)};
+window.ogFireNew=()=>{if(!DEMO&&!NET){O().toast("Войдите через Google (кнопка вверху), чтобы создать группу");const b=document.getElementById("loginTop");if(b&&!b.hidden)b.click();return}setup(false)};
 window.ogFireInfo=()=>FIRES.length?{n:FIRES.length}:null;
 window.ogFireSettings=()=>setup(false);
 window.ogFireOpen=()=>setup(false);

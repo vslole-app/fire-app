@@ -2,7 +2,7 @@
 import { createSectionCounts, watchPathCard } from "./src/section-counts.js?v=2";
 import { firebaseConfig } from "./firebase-config.js?v=202610031821";
 import { createEncouragementService } from "./src/encouragement-service.js?v=flame-words-1";
-import { createFriendActions } from "./src/friend-actions.js?v=refactor11";
+import { createFriendActions, pendingFriendRequests } from "./src/friend-actions.js?v=20261127-requests";
 import { createEncouragementConfig } from "./src/encouragement-config.js?v=flame-words-1";
 import { createFriendLookup } from "./src/friend-lookup.js?v=refactor10";
 import { shrinkPhoto } from "./src/profile-photo.js?v=refactor9";
@@ -86,7 +86,7 @@ async function main() {
   function showLoginLink() { $("account").hidden = true; }
 
   /* ---------- friends ---------- */
-  let me = null, myRef = null, myCode = "", myNick = "", myNameSet = false, friendUnsubs = {}, friendData = {}, myUnsub = null, myFriends = [], myFollowing = [], myFollowers = [], myDeclined = [], knownReq = null, globeHide = false, activeProfileId = null;
+  let me = null, myRef = null, myCode = "", myNick = "", myNameSet = false, friendUnsubs = {}, friendData = {}, myUnsub = null, myFriends = [], myFollowing = [], myFollowers = [], myDeclined = [], globeHide = false, activeProfileId = null;
   const serverVerifiedFriends = new Set();
 
   function randomCode() { let s = ""; const a = new Uint32Array(6); crypto.getRandomValues(a); a.forEach((n) => { s += CODE_ABC[n % CODE_ABC.length]; }); return s; }
@@ -300,7 +300,7 @@ async function main() {
     });
     renderFriends();
   }
-  const pendingRequests = () => myFollowers.filter((u) => !myFriends.includes(u) && !myDeclined.includes(u));
+  const pendingRequests = () => pendingFriendRequests(myFollowers, myFriends, myDeclined, me && me.uid);
   const cardCache = {};
   async function cardOf(uid) {
     if (cardCache[uid]) return cardCache[uid];
@@ -758,7 +758,7 @@ async function main() {
           row.append(b);
         }
       });
-      const isFriend = myFriends.includes(id), isFollowing = myFollowing.includes(id), asksMe = myFollowers.includes(id);
+      const isFriend = myFriends.includes(id), isFollowing = myFollowing.includes(id), asksMe = pendingRequests().includes(id);
       if (!isFriend && !isFollowing) {
         // ещё не подписан: можно отправить заявку или принять входящую
         const box = el("div", "frel");
@@ -920,6 +920,7 @@ async function main() {
     if (allTab === "readers") {
       list.append(readerDirectory());
     } else if (allTab === "friends") {
+      list.append(requestSection(reqs));
       rows.forEach((r) => list.append(friendRow(r.d, r.me, r.uid)));
       if (rows.length < 2) list.append(el("p", "hint", "Пока нет друзей."));
     }
@@ -1220,15 +1221,9 @@ async function main() {
     else res.append(el("p", "hint fshint", "Нажмите на человека, чтобы открыть профиль и добавить в друзья."));
   }
 
-  function renderFriends() {
-    if (!me) return;
-    try { fsSetup(); } catch (e) { console.warn(e); }
-    $("myCode").textContent = myCode || "…";
-    const box = $("friendsList"); box.textContent = "";
-    // заявки в друзья (мои подписчики, которых я ещё не принял)
-    const reqs = pendingRequests();
-    if (reqs.length) {
-      const rq = el("div", "freqs"); rq.append(el("span", "label", "Заявки в друзья · " + reqs.length));
+  function requestSection(reqs) {
+    const rq = el("div", "freqs"); rq.append(el("span", "label", "Заявки · " + reqs.length));
+    if (!reqs.length) rq.append(el("p", "hint", "Нет новых заявок в друзья."));
       reqs.forEach((u) => {
         const row = el("div", "ffrow freq"), nm = el("span", null, "…"), av = el("div", "favatar", "?");
         row.append(av, nm);
@@ -1241,8 +1236,16 @@ async function main() {
         no.addEventListener("click", () => { no.disabled = true; declineRequest(u); });
         const bt = el("div", "fbtns"); bt.append(ok, no); row.append(bt); rq.append(row);
       });
-      box.append(rq);
-    }
+    return rq;
+  }
+
+  function renderFriends() {
+    if (!me) return;
+    try { fsSetup(); } catch (e) { console.warn(e); }
+    $("myCode").textContent = myCode || "…";
+    const box = $("friendsList"); box.textContent = "";
+    const reqs = pendingRequests();
+    if (reqs.length) box.append(requestSection(reqs));
     const rows = sortedRows();
     // на главной: я и два друга; все остальные — на отдельном экране «Все друзья и подписчики»
     let shown = 0;
@@ -1575,7 +1578,7 @@ async function main() {
     window.confNet(net, team);
   }
 
-  /* ---------- жизненные группы: читать вместе (groups/{КОД}) ---------- */
+  /* ---------- группы: читать вместе (groups/{КОД}) ---------- */
   let groupsUnsub = null, groupInvUnsub = null;
   function setupGroups() {
     if (!window.ogGroupsNet) return;
@@ -1664,7 +1667,7 @@ async function main() {
   A.onAuthStateChanged(auth, async (user) => {
     sectionCounts.setSignedIn(!!user, document.body.dataset.page || "home");
     refreshPathCount();
-    Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = []; knownReq = null;
+    Object.values(friendUnsubs).forEach((u) => u()); friendUnsubs = {}; friendData = {}; serverVerifiedFriends.clear(); globeReadCache = Object.create(null); myFriends = []; myFollowing = []; myFollowers = []; myDeclined = [];
     if (myUnsub) { myUnsub(); myUnsub = null; }
     if (inboxUnsub) { inboxUnsub(); inboxUnsub = null; } cheerQueue = []; seenCheers.clear();
     if (teamInvUnsub) { teamInvUnsub(); teamInvUnsub = null; } if (window.confNet) window.confNet(null);
@@ -1776,10 +1779,7 @@ async function main() {
         // A server-confirmed profile snapshot also recovers the privacy choice.
         if (!profileReady && snap.exists() && !snap.metadata.fromCache) { profileReady = true; publishSummary(true); }
         else if (hideChanged && profileReady && progressVerified) publishSummary();
-        // новая заявка — короткое уведомление
-        const pend = pendingRequests();
-        if (knownReq) pend.filter((u) => !knownReq.has(u)).forEach((u) => cardOf(u).then((c) => O().toast((c.name || "Читатель") + " хочет стать вашим другом")));
-        knownReq = new Set(pend);
+        // Заявки показываем только в разделе друзей, без всплывающих уведомлений.
         syncFriendSubs(myProfile.friends || [], myProfile.following || []);
         globeRelSync();
       });

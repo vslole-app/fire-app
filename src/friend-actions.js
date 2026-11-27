@@ -1,3 +1,8 @@
+export function pendingFriendRequests(followers, friends, declined, uid) {
+  const excluded = new Set([...friends, ...declined, uid]);
+  return [...new Set(followers)].filter(u => u && !excluded.has(u));
+}
+
 export function createFriendActions({F,db,O,getContext}){
   // заявка в друзья: я подписываюсь на человека; дружба — когда он примет заявку (или если он уже подписан на меня)
   async function addFriendUid(fuid) {

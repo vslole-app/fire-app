@@ -5,7 +5,12 @@ globalThis.window={Ogonek:{planId:"spb",DAYS:364}};
 const {fLit,fProfileReadToday,fScheduleReadToday,fLiveAhead}=await load("friend-progress");
 const {createEncouragementConfig}=await load("encouragement-config");
 const {createEncouragementService}=await load("encouragement-service");
-const {createFriendActions}=await load("friend-actions");
+const {createFriendActions,pendingFriendRequests}=await load("friend-actions");
+// Incoming requests exclude current friends, declined users, duplicates and self.
+assert.deepEqual(pendingFriendRequests(["sonya"],["sonya"],[],"me"),[]);
+assert.deepEqual(pendingFriendRequests(["sonya","anna","anna","me"],["sonya"],[],"me"),["anna"]);
+assert.deepEqual(pendingFriendRequests(["sonya"],[],["sonya"],"me"),[]);
+assert.deepEqual(pendingFriendRequests(["sonya"],[],[],"me"),["sonya"]);
 const {KIND}=createEncouragementConfig();
 assert.equal(fLit({heroFlameDay:"2026-11-20",globeSchedule:{passages:[{last:"2026-11-20"},{last:""}]}},"2026-11-20"),true);
 assert.equal(fLit({heroFlameDay:"",globeSchedule:{passages:[{last:"2026-11-20"}]}},"2026-11-20"),false);

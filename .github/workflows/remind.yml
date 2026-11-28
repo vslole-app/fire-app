@@ -29,10 +29,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FORCE: ${{ inputs.force }}
       - name: Test friend notification payloads
+        id: friend_tests
         if: ${{ always() && !cancelled() }}
         run: python -m unittest discover -s .github/scripts -p test_friend_push.py
       - name: Deliver pending friend notifications
-        if: ${{ !cancelled() && inputs.force != true }}
+        if: ${{ !cancelled() && steps.friend_tests.outcome == 'success' && inputs.force != true }}
         run: python .github/scripts/friend_push.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
